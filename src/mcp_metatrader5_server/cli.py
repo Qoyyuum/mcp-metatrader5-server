@@ -10,10 +10,17 @@ import os
 import sys
 import subprocess
 from importlib.metadata import version
+from starlette.applications import Starlette
+from starlette.routing import Mount
 
 from mcp_metatrader5_server.main import mcp
 
 logger = logging.getLogger("mt5-mcp-server.cli")
+
+# Create the Starlette application with mounted FastMCP
+app = Starlette(routes=[
+    Mount("/", app=mcp)
+])
 
 def get_version():
     """Get the package version."""
@@ -56,11 +63,11 @@ def main():
         # Run in development mode
         os.environ["MT5_MCP_DEV_MODE"] = "true"
         try:
-            # Use uvicorn directly
+            # Use uvicorn directly with the Starlette application
             import uvicorn
             logger.info(f"Starting server at {args.host}:{args.port}")
             uvicorn.run(
-                "mcp_metatrader5_server.main:mcp",
+                "mcp_metatrader5_server.cli:app",
                 host=args.host,
                 port=args.port,
                 reload=True
@@ -68,15 +75,17 @@ def main():
             return 0
         except ImportError:
             # If uvicorn is not available, try using the command line
-            cmd = [sys.executable, "-m", "uvicorn", "mcp_metatrader5_server.main:mcp", 
+            cmd = [sys.executable, "-m", "uvicorn", "mcp_metatrader5_server.cli:app", 
                    f"--host={args.host}", f"--port={args.port}", "--reload"]
             logger.info(f"Running command: {' '.join(cmd)}")
             return subprocess.call(cmd)
     elif args.command == "install":
         # Install for Claude Desktop
         try:
-            cmd = [sys.executable, "--with", "mcp-metatrader5-server", "fastmcp", "install", "src\mcp_metatrader5_server\server.py"]
-            return subprocess.call(cmd)
+            # Use the mounted application for installation
+            import fastmcp
+            fastmcp.install(app)
+            return 0
         except ImportError:
             logger.error("Failed to install MCP server for Claude Desktop")
             return 1

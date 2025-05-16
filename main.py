@@ -8,6 +8,8 @@ import logging
 import os
 from fastmcp import FastMCP
 from fastmcp.prompts.base import UserMessage, AssistantMessage
+from starlette.applications import Starlette
+from starlette.routing import Mount
 
 # Import server modules
 from mt5_server import mcp
@@ -137,6 +139,11 @@ def market_data_guide() -> str:
     with open("docs/market_data_guide.md", "r") as file:
         return file.read()
 
+# Create a Starlette application with the FastMCP mounted
+app = Starlette(routes=[
+    Mount("/", app=mcp)
+])
+
 # Run the server
 if __name__ == "__main__":
     # Check if running in development mode
@@ -145,7 +152,7 @@ if __name__ == "__main__":
     if dev_mode:
         # Run in development mode
         import uvicorn
-        uvicorn.run("main:mcp.app", host="0.0.0.0", port=8000, reload=True)
+        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
     else:
         # Run with FastMCP CLI
         print("Run the server with: fastmcp dev main.py")
