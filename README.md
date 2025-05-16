@@ -33,7 +33,23 @@ pip install -e .
 
 This project includes a fix for the `TypeError: 'FastMCP' object is not callable` error that may occur when running the server with Uvicorn. This is a known issue with FastMCP ([GitHub issue #69](https://github.com/jlowin/fastmcp/issues/69)) where the FastMCP objects need to be properly wrapped for ASGI compatibility.
 
-We've implemented an ASGI wrapper function to ensure the server runs correctly. There are three ways to run the server with this fix:
+We've implemented the solution by mounting the FastMCP object directly to a Starlette application. The key is to pass the FastMCP object directly to the Starlette `Mount` class without trying to call it or access any `.app` attribute:
+
+```python
+from starlette.applications import Starlette
+from starlette.routing import Mount
+from mt5_server import mcp
+
+# Create a proper ASGI application
+app = Starlette(routes=[
+    Mount("/", app=mcp)
+])
+
+# Run with uvicorn
+uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+There are three ways to run the server with this fix:
 
 ### Running the Server
 

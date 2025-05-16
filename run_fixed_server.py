@@ -18,27 +18,11 @@ if current_dir not in sys.path:
 # Import the FastMCP server
 from mt5_server import mcp
 
-# Define an ASGI wrapper for FastMCP
-async def asgi_wrapper(scope, receive, send):
-    """ASGI wrapper to ensure FastMCP object is properly callable."""
-    if scope["type"] == "lifespan":
-        # Handle lifespan events
-        while True:
-            message = await receive()
-            if message["type"] == "lifespan.startup":
-                # Do any startup tasks here
-                await send({"type": "lifespan.startup.complete"})
-            elif message["type"] == "lifespan.shutdown":
-                # Do any shutdown tasks here
-                await send({"type": "lifespan.shutdown.complete"})
-                return
-    else:
-        # Delegate to the FastMCP object
-        await mcp(scope, receive, send)
-
 # Create a proper ASGI application using Starlette
+# The key is that we don't try to call mcp or access mcp.app
+# Instead, we pass the mcp object directly to Mount
 app = Starlette(routes=[
-    Mount("/", app=asgi_wrapper)
+    Mount("/", app=mcp)
 ])
 
 if __name__ == "__main__":
