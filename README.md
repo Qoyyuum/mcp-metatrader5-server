@@ -33,35 +33,32 @@ pip install -e .
 
 This project includes a fix for the `TypeError: 'FastMCP' object is not callable` error that may occur when running the server with Uvicorn. This is a known issue with FastMCP ([GitHub issue #69](https://github.com/jlowin/fastmcp/issues/69)) where the FastMCP objects need to be properly wrapped for ASGI compatibility.
 
-We've implemented the solution by mounting the FastMCP object directly to a Starlette application. The key is to pass the FastMCP object directly to the Starlette `Mount` class without trying to call it or access any `.app` attribute:
+According to the official FastMCP documentation, the correct way to integrate FastMCP with ASGI servers is to use the built-in `sse_app()` method:
 
 ```python
-from starlette.applications import Starlette
-from starlette.routing import Mount
 from mt5_server import mcp
+import uvicorn
 
-# Create a proper ASGI application
-app = Starlette(routes=[
-    Mount("/", app=mcp)
-])
+# Get the ASGI app from the FastMCP object
+app = mcp.sse_app(path="/sse")
 
 # Run with uvicorn
 uvicorn.run(app, host="127.0.0.1", port=8000)
 ```
 
-There are three ways to run the server with this fix:
+This creates a proper ASGI application that can be used with Uvicorn, and sets up the MCP endpoint at the `/sse` path.
 
-### Running the Server
+There are three ways to run the server with this fix:
 
 #### Option 1: Using the fixed runner script (Recommended)
 
-The simplest way to run the server with the ASGI fix:
+The simplest way to run the server:
 
 ```bash
 python run_fixed_server.py
 ```
 
-This will start the server on 127.0.0.1:8000 by default. You can configure the host and port using environment variables:
+This will start the server on 127.0.0.1:8000 by default with the MCP endpoint at `/sse`. You can configure the host and port using environment variables:
 
 ```bash
 # Windows (Command Prompt)
@@ -80,7 +77,17 @@ export MT5_MCP_PORT=8080
 python run_fixed_server.py
 ```
 
-#### Option 2: Development mode with main.py
+#### Option 2: Native FastMCP Server
+
+For simpler use cases, you can use FastMCP's built-in server implementation:
+
+```bash
+python run_native_server.py
+```
+
+This uses the built-in `mcp.run()` method with SSE transport, which avoids ASGI compatibility issues entirely.
+
+#### Option 3: Development mode with main.py
 
 ```bash
 # Windows (Command Prompt)

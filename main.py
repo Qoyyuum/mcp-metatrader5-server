@@ -139,11 +139,8 @@ def market_data_guide() -> str:
     with open("docs/market_data_guide.md", "r") as file:
         return file.read()
 
-# Create a proper ASGI application using Starlette
-# Pass the FastMCP object directly to Mount
-app = Starlette(routes=[
-    Mount("/", app=mcp)
-])
+# Get an ASGI app from the FastMCP object using the official method
+app = mcp.sse_app(path="/sse")
 
 # Run the server
 if __name__ == "__main__":

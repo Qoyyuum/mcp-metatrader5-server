@@ -10,17 +10,14 @@ import os
 import sys
 import subprocess
 from importlib.metadata import version
-from starlette.applications import Starlette
-from starlette.routing import Mount
+import inspect
 
 from mcp_metatrader5_server.main import mcp
 
 logger = logging.getLogger("mt5-mcp-server.cli")
 
-# Create the Starlette application with mounted FastMCP
-app = Starlette(routes=[
-    Mount("/", app=mcp)
-])
+# Get an ASGI app from the FastMCP object using the official method
+app = mcp.sse_app(path="/sse")
 
 def get_version():
     """Get the package version."""
