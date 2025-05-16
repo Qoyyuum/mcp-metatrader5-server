@@ -16,12 +16,13 @@ if current_dir not in sys.path:
 from mt5_server import mcp
 
 if __name__ == "__main__":
-    # Configure host and port from environment variables
-    host = os.environ.get("MT5_MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("MT5_MCP_PORT", "8000"))
+    # Display config info
+    host = "127.0.0.1"  # Default host
+    port = "8000"       # Default port
     
-    print(f"Starting MT5 MCP Server on {host}:{port}")
+    print(f"Starting MT5 MCP Server (default configuration is {host}:{port})")
+    print(f"SSE endpoint should be available at http://localhost:8000/sse")
     print("Press Ctrl+C to stop the server")
     
-    # Run the server with SSE transport
-    mcp.run(host=host, port=port, transport="sse") 
+    # Run using the simplest form of the run method
+    mcp.run(transport="sse") 

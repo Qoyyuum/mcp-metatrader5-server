@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Fixed server runner for the MetaTrader 5 MCP server.
-Uses FastMCP's run() method with SSE transport explicitly configured.
+Uses FastMCP's basic run method with SSE transport.
 """
 
 import os
@@ -16,14 +16,14 @@ if current_dir not in sys.path:
 from mt5_server import mcp
 
 if __name__ == "__main__":
-    # Configure host and port
-    host = os.environ.get("MT5_MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("MT5_MCP_PORT", "8000"))
+    # Display config info
+    host = "127.0.0.1"  # Default host
+    port = "8000"       # Default port
     
-    print(f"Starting MT5 MCP Server on {host}:{port}")
-    print(f"SSE endpoint available at http://{host}:{port}/sse")
+    print(f"Starting MT5 MCP Server (default configuration is {host}:{port})")
+    print(f"SSE endpoint should be available at http://localhost:8000/sse")
     print("Press Ctrl+C to stop the server")
     
-    # Run using the built-in run method with SSE transport
-    # This correctly sets up the /sse endpoint
-    mcp.run(host=host, port=port, transport="sse") 
+    # Run using the simplest form of the run method
+    # For some versions of FastMCP, this is the only supported format
+    mcp.run(transport="sse") 

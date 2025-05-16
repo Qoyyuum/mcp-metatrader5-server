@@ -64,9 +64,12 @@ def main():
         if args.use_sse:
             try:
                 # Run the server directly with SSE transport
-                logger.info(f"Starting server at {args.host}:{args.port} with SSE transport")
-                print(f"SSE endpoint available at http://{args.host}:{args.port}/sse")
-                mcp.run(host=args.host, port=args.port, transport="sse", reload=True)
+                logger.info(f"Running server with SSE transport")
+                print(f"Default configuration is typically 127.0.0.1:8000")
+                print(f"SSE endpoint should be available at http://localhost:8000/sse")
+                
+                # Run with minimal parameters - only specify transport
+                mcp.run(transport="sse", reload=True)
                 return 0
             except Exception as e:
                 logger.error(f"Failed to start server with SSE transport: {e}")
@@ -95,9 +98,12 @@ def main():
                 # If uvicorn fails, try the SSE transport as a fallback
                 logger.warning(f"ASGI/Uvicorn approach failed with {e}, trying SSE transport as fallback")
                 try:
-                    logger.info(f"Starting server at {args.host}:{args.port} with SSE transport")
-                    print(f"SSE endpoint available at http://{args.host}:{args.port}/sse")
-                    mcp.run(host=args.host, port=args.port, transport="sse", reload=True)
+                    logger.info(f"Running server with SSE transport")
+                    print(f"Default configuration is typically 127.0.0.1:8000")
+                    print(f"SSE endpoint should be available at http://localhost:8000/sse")
+                    
+                    # Run with minimal parameters - only specify transport
+                    mcp.run(transport="sse", reload=True)
                     return 0
                 except Exception as e2:
                     logger.error(f"Failed to start server with SSE transport: {e2}")

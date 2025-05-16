@@ -148,14 +148,17 @@ if __name__ == "__main__":
     use_sse = os.environ.get("MT5_MCP_USE_SSE", "false").lower() == "true"
     
     if dev_mode:
-        host = "0.0.0.0"
-        port = 8000
+        host = "127.0.0.1"  # Default host 
+        port = "8000"       # Default port
         
         if use_sse:
-            # Run with SSE transport
-            print(f"Starting MT5 MCP Server on {host}:{port} with SSE transport")
-            print(f"SSE endpoint available at http://{host}:{port}/sse")
-            mcp.run(host=host, port=port, transport="sse", reload=True)
+            # Run with SSE transport using the simplest form
+            print(f"Starting MT5 MCP Server with SSE transport")
+            print(f"Default configuration is typically {host}:{port}")
+            print(f"SSE endpoint should be available at http://localhost:8000/sse")
+            
+            # Run with minimal parameters - only specify transport
+            mcp.run(transport="sse", reload=True)
         else:
             # Original approach using Uvicorn
             try:
@@ -167,9 +170,11 @@ if __name__ == "__main__":
                 # If uvicorn fails, try the SSE transport as a fallback
                 print(f"ASGI/Uvicorn approach failed with: {e}")
                 print("Trying SSE transport as fallback")
-                print(f"Starting MT5 MCP Server on {host}:{port} with SSE transport")
-                print(f"SSE endpoint available at http://{host}:{port}/sse")
-                mcp.run(host=host, port=port, transport="sse", reload=True)
+                print(f"Starting MT5 MCP Server with SSE transport")
+                print(f"SSE endpoint should be available at http://localhost:8000/sse")
+                
+                # Run with minimal parameters
+                mcp.run(transport="sse", reload=True)
     else:
         # Run with FastMCP CLI
         print("Run the server with: fastmcp dev main.py")
