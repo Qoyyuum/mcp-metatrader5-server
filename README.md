@@ -31,22 +31,24 @@ pip install -e .
 
 ### ASGI Compatibility Fix
 
+> **Note:** This section provides alternative ways to run the server that address ASGI compatibility issues. The original methods in the main branch continue to work as intended if you don't experience these issues.
+
 This project includes a fix for the `TypeError: 'FastMCP' object is not callable` error that may occur when running the server with Uvicorn. This is a known issue with FastMCP ([GitHub issue #69](https://github.com/jlowin/fastmcp/issues/69)) where the FastMCP objects need to be properly wrapped for ASGI compatibility.
 
-According to the official FastMCP documentation, the correct way to integrate FastMCP with ASGI servers is to use the built-in `sse_app()` method:
+After exploring different approaches, the simplest solution is to use FastMCP's built-in `run()` method with the SSE transport option:
 
 ```python
 from mt5_server import mcp
-import uvicorn
 
-# Get the ASGI app from the FastMCP object
-app = mcp.sse_app(path="/sse")
+# Configure host and port
+host = "127.0.0.1"
+port = 8000
 
-# Run with uvicorn
-uvicorn.run(app, host="127.0.0.1", port=8000)
+# Run with SSE transport explicitly configured
+mcp.run(host=host, port=port, transport="sse")
 ```
 
-This creates a proper ASGI application that can be used with Uvicorn, and sets up the MCP endpoint at the `/sse` path.
+This creates a server with SSE (Server-Sent Events) transport, which is compatible with our LangChain MCP client. The SSE endpoint is available at the `/sse` path.
 
 There are three ways to run the server with this fix:
 
@@ -58,7 +60,7 @@ The simplest way to run the server:
 python run_fixed_server.py
 ```
 
-This will start the server on 127.0.0.1:8000 by default with the MCP endpoint at `/sse`. You can configure the host and port using environment variables:
+This will start the server on 127.0.0.1:8000 by default with the SSE endpoint at `/sse`. You can configure the host and port using environment variables:
 
 ```bash
 # Windows (Command Prompt)
@@ -89,6 +91,8 @@ This uses the built-in `mcp.run()` method with SSE transport, which avoids ASGI 
 
 #### Option 3: Development mode with main.py
 
+By default, this will attempt to use the original Uvicorn approach, falling back to SSE transport if needed:
+
 ```bash
 # Windows (Command Prompt)
 set MT5_MCP_DEV_MODE=true
@@ -103,12 +107,37 @@ export MT5_MCP_DEV_MODE=true
 python main.py
 ```
 
-#### Option 3: Using the CLI
+To explicitly use SSE transport:
 
-To run the server in development mode with the CLI:
+```bash
+# Windows (Command Prompt)
+set MT5_MCP_DEV_MODE=true
+set MT5_MCP_USE_SSE=true
+python main.py
+
+# Windows (PowerShell)
+$env:MT5_MCP_DEV_MODE="true"
+$env:MT5_MCP_USE_SSE="true"
+python main.py
+
+# Linux/macOS
+export MT5_MCP_DEV_MODE=true
+export MT5_MCP_USE_SSE=true
+python main.py
+```
+
+#### Option 4: Using the CLI
+
+To run the server in development mode with the CLI using the original method:
 
 ```bash
 python -m mcp_metatrader5_server.cli dev
+```
+
+To run with SSE transport instead:
+
+```bash
+python -m mcp_metatrader5_server.cli dev --use-sse
 ```
 
 Or using uv:

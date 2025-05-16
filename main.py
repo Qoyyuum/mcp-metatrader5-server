@@ -139,18 +139,37 @@ def market_data_guide() -> str:
     with open("docs/market_data_guide.md", "r") as file:
         return file.read()
 
-# Get an ASGI app from the FastMCP object using the official method
-app = mcp.sse_app(path="/sse")
-
 # Run the server
 if __name__ == "__main__":
     # Check if running in development mode
     dev_mode = os.environ.get("MT5_MCP_DEV_MODE", "false").lower() == "true"
     
+    # Check if SSE transport is explicitly requested
+    use_sse = os.environ.get("MT5_MCP_USE_SSE", "false").lower() == "true"
+    
     if dev_mode:
-        # Run in development mode
-        import uvicorn
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        host = "0.0.0.0"
+        port = 8000
+        
+        if use_sse:
+            # Run with SSE transport
+            print(f"Starting MT5 MCP Server on {host}:{port} with SSE transport")
+            print(f"SSE endpoint available at http://{host}:{port}/sse")
+            mcp.run(host=host, port=port, transport="sse", reload=True)
+        else:
+            # Original approach using Uvicorn
+            try:
+                # Run in development mode
+                import uvicorn
+                print(f"Starting MT5 MCP Server on {host}:{port} with ASGI/Uvicorn")
+                uvicorn.run("main:mcp.app", host=host, port=port, reload=True)
+            except Exception as e:
+                # If uvicorn fails, try the SSE transport as a fallback
+                print(f"ASGI/Uvicorn approach failed with: {e}")
+                print("Trying SSE transport as fallback")
+                print(f"Starting MT5 MCP Server on {host}:{port} with SSE transport")
+                print(f"SSE endpoint available at http://{host}:{port}/sse")
+                mcp.run(host=host, port=port, transport="sse", reload=True)
     else:
         # Run with FastMCP CLI
         print("Run the server with: fastmcp dev main.py")

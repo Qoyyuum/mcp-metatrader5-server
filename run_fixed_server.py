@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 """
 Fixed server runner for the MetaTrader 5 MCP server.
-Uses the official FastMCP ASGI integration with SSE transport.
+Uses FastMCP's run() method with SSE transport explicitly configured.
 """
 
 import os
 import sys
-import uvicorn
 
 # Add the current directory to the path if not already there
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -16,18 +15,15 @@ if current_dir not in sys.path:
 # Import the FastMCP server
 from mt5_server import mcp
 
-# Get an ASGI app from the FastMCP object using the official method
-# The client is configured to use SSE transport, so we use sse_app()
-app = mcp.sse_app(path="/sse")
-
 if __name__ == "__main__":
     # Configure host and port
     host = os.environ.get("MT5_MCP_HOST", "127.0.0.1")
     port = int(os.environ.get("MT5_MCP_PORT", "8000"))
     
     print(f"Starting MT5 MCP Server on {host}:{port}")
-    print(f"MCP endpoint available at http://{host}:{port}/sse")
+    print(f"SSE endpoint available at http://{host}:{port}/sse")
     print("Press Ctrl+C to stop the server")
     
-    # Run the server
-    uvicorn.run(app, host=host, port=port) 
+    # Run using the built-in run method with SSE transport
+    # This correctly sets up the /sse endpoint
+    mcp.run(host=host, port=port, transport="sse") 
