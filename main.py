@@ -139,9 +139,27 @@ def market_data_guide() -> str:
     with open("docs/market_data_guide.md", "r") as file:
         return file.read()
 
-# Create a Starlette application with the FastMCP mounted
+# Define an ASGI wrapper for FastMCP
+async def asgi_wrapper(scope, receive, send):
+    """ASGI wrapper to ensure FastMCP object is properly callable."""
+    if scope["type"] == "lifespan":
+        # Handle lifespan events
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                # Do any startup tasks here
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                # Do any shutdown tasks here
+                await send({"type": "lifespan.shutdown.complete"})
+                return
+    else:
+        # Delegate to the FastMCP object
+        await mcp(scope, receive, send)
+
+# Use the ASGI wrapper
 app = Starlette(routes=[
-    Mount("/", app=mcp.app)
+    Mount("/", app=asgi_wrapper)
 ])
 
 # Run the server

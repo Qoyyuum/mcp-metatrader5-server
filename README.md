@@ -29,20 +29,75 @@ pip install -e .
 
 ## Usage
 
+### ASGI Compatibility Fix
+
+This project includes a fix for the `TypeError: 'FastMCP' object is not callable` error that may occur when running the server with Uvicorn. This is a known issue with FastMCP ([GitHub issue #69](https://github.com/jlowin/fastmcp/issues/69)) where the FastMCP objects need to be properly wrapped for ASGI compatibility.
+
+We've implemented an ASGI wrapper function to ensure the server runs correctly. There are three ways to run the server with this fix:
+
 ### Running the Server
 
-To run the server in development mode:
+#### Option 1: Using the fixed runner script (Recommended)
+
+The simplest way to run the server with the ASGI fix:
+
+```bash
+python run_fixed_server.py
+```
+
+This will start the server on 127.0.0.1:8000 by default. You can configure the host and port using environment variables:
+
+```bash
+# Windows (Command Prompt)
+set MT5_MCP_HOST=0.0.0.0
+set MT5_MCP_PORT=8080
+python run_fixed_server.py
+
+# Windows (PowerShell)
+$env:MT5_MCP_HOST="0.0.0.0"
+$env:MT5_MCP_PORT="8080"
+python run_fixed_server.py
+
+# Linux/macOS
+export MT5_MCP_HOST=0.0.0.0
+export MT5_MCP_PORT=8080
+python run_fixed_server.py
+```
+
+#### Option 2: Development mode with main.py
+
+```bash
+# Windows (Command Prompt)
+set MT5_MCP_DEV_MODE=true
+python main.py
+
+# Windows (PowerShell)
+$env:MT5_MCP_DEV_MODE="true"
+python main.py
+
+# Linux/macOS
+export MT5_MCP_DEV_MODE=true
+python main.py
+```
+
+#### Option 3: Using the CLI
+
+To run the server in development mode with the CLI:
+
+```bash
+python -m mcp_metatrader5_server.cli dev
+```
+
+Or using uv:
 
 ```bash
 uv run mt5mcp dev
 ```
 
-This will start the server at http://127.0.0.1:8000 by default.
-
 You can specify a different host and port:
 
 ```bash
-uv run mt5mcp dev --host 0.0.0.0 --port 8080
+python -m mcp_metatrader5_server.cli dev --host 0.0.0.0 --port 8080
 ```
 
 ### Installing for Claude Desktop
