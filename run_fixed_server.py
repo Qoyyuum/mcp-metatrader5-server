@@ -20,7 +20,7 @@ from mt5_server import mcp
 
 # Create a proper ASGI application using Starlette
 app = Starlette(routes=[
-    Mount("/", app=mcp)
+    Mount("/", app=mcp.app)
 ])
 
 if __name__ == "__main__":

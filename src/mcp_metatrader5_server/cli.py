@@ -19,7 +19,7 @@ logger = logging.getLogger("mt5-mcp-server.cli")
 
 # Create the Starlette application with mounted FastMCP
 app = Starlette(routes=[
-    Mount("/", app=mcp)
+    Mount("/", app=mcp.app)
 ])
 
 def get_version():

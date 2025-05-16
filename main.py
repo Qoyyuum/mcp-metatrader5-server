@@ -141,7 +141,7 @@ def market_data_guide() -> str:
 
 # Create a Starlette application with the FastMCP mounted
 app = Starlette(routes=[
-    Mount("/", app=mcp)
+    Mount("/", app=mcp.app)
 ])
 
 # Run the server
