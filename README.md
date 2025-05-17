@@ -10,6 +10,7 @@ A Model Context Protocol (MCP) server for MetaTrader 5, allowing AI assistants t
 - Analyze trading history
 - Integrate with AI assistants through the Model Context Protocol
 - ASGI server support for integration with modern web frameworks
+- Support for both SSE and Streamable HTTP transports
 
 ## Installation
 
@@ -67,6 +68,35 @@ uvicorn asgi:app --host 0.0.0.0 --port 8000 --reload
 
 The `--reload` flag enables auto-reloading when the code changes, which is useful during development.
 
+#### Transport Compatibility
+
+The ASGI server supports two transport methods:
+
+1. **SSE (Server-Sent Events)** - Available at the root path `/` for compatibility with existing clients
+2. **Streamable HTTP** - Available at `/mt5/mcp` for newer clients supporting this transport
+
+You can use either transport depending on your client's capabilities.
+
+#### Client Connection Example
+
+For clients expecting the SSE transport (most common):
+
+```python
+from mcp.client import Client
+
+# Connect to the SSE endpoint (default for most clients)
+client = Client("http://localhost:8000")
+```
+
+For clients using the Streamable HTTP transport:
+
+```python
+from mcp.client import Client
+
+# Connect to the Streamable HTTP endpoint
+client = Client("http://localhost:8000/mt5/mcp", transport="streamable_http")
+```
+
 #### Configuration via Environment Variables
 
 The ASGI server can be configured using environment variables:
@@ -79,11 +109,12 @@ The ASGI server can be configured using environment variables:
 
 The ASGI server provides the following endpoints:
 
-- `/`: Root endpoint providing basic server information
+- `/`: SSE transport MCP endpoint
+- `/info`: Server information endpoint
 - `/health`: Health check endpoint
 - `/docs`: OpenAPI documentation (provided by FastAPI)
 - `/redoc`: Alternative OpenAPI documentation (provided by FastAPI)
-- `/mt5/mcp`: The MCP endpoint for interacting with MetaTrader 5
+- `/mt5/mcp`: Streamable HTTP transport MCP endpoint
 
 ### Installing for Claude Desktop
 

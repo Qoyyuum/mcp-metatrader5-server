@@ -22,19 +22,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mt5-mcp-asgi-server")
 
-# Create a Starlette ASGI app using the preferred Streamable HTTP transport
-mcp_app = mcp.streamable_http_app(path="/mcp")
+# Create Starlette ASGI apps for both transport types
+http_app = mcp.streamable_http_app(path="/mcp")
+sse_app = mcp.sse_app(path="/")  # Root path for SSE to maintain compatibility with existing clients
 
 # Create a FastAPI app
 app = FastAPI(
     title="MetaTrader 5 MCP API",
     description="API for interacting with MetaTrader 5 via Model Context Protocol",
     version="0.1.0",
-    lifespan=mcp_app.router.lifespan_context,  # Required for proper initialization
+    lifespan=http_app.router.lifespan_context,  # Required for proper initialization
 )
 
-# Mount the MCP app
-app.mount("/mt5", mcp_app)
+# Mount both apps
+app.mount("/mt5", http_app)  # For Streamable HTTP transport
+app.mount("/", sse_app)      # For SSE transport (at root for compatibility)
 
 # Add a health check endpoint
 @app.get("/health")
@@ -43,14 +45,17 @@ async def health_check() -> dict:
     return {"status": "healthy", "service": "mt5-mcp-server"}
 
 # Add a root endpoint for basic information
-@app.get("/")
-async def root() -> dict:
-    """Root endpoint providing basic server information"""
+@app.get("/info")
+async def info() -> dict:
+    """Information endpoint providing basic server information"""
     return {
         "service": "MetaTrader 5 MCP Server",
         "version": "0.1.0",
         "docs": "/docs",
-        "mcp_endpoint": "/mt5/mcp"
+        "transport_endpoints": {
+            "streamable_http": "/mt5/mcp",
+            "sse": "/"
+        }
     }
 
 # Create a standalone app that can be used with any ASGI server
