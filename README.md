@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server for MetaTrader 5, allowing AI assistants t
 - Place and manage trades
 - Analyze trading history
 - Integrate with AI assistants through the Model Context Protocol
+- ASGI server support for integration with modern web frameworks
 
 ## Installation
 
@@ -26,10 +27,11 @@ pip install -e .
 - Python 3.11 or higher
 - MetaTrader 5 terminal installed
 - MetaTrader 5 account (demo or real)
+- FastMCP v2.3.4 or higher
 
 ## Usage
 
-### Running the Server
+### Running the Standard Server
 
 To run the server in development mode:
 
@@ -44,6 +46,44 @@ You can specify a different host and port:
 ```bash
 uv run mt5mcp dev --host 0.0.0.0 --port 8080
 ```
+
+### Running the ASGI Server
+
+The ASGI server implementation provides better integration with modern web frameworks and deployment options.
+
+#### Direct Execution
+
+```bash
+python asgi.py
+```
+
+This will start a Uvicorn server on port 8000 (default) that hosts the MetaTrader 5 MCP server.
+
+#### Using Uvicorn Directly
+
+```bash
+uvicorn asgi:app --host 0.0.0.0 --port 8000 --reload
+```
+
+The `--reload` flag enables auto-reloading when the code changes, which is useful during development.
+
+#### Configuration via Environment Variables
+
+The ASGI server can be configured using environment variables:
+
+- `MT5_MCP_HOST`: Host to bind the server to (default: `0.0.0.0`)
+- `MT5_MCP_PORT`: Port to bind the server to (default: `8000`)
+- `MT5_MCP_DEV_MODE`: Whether to run in development mode with auto-reload (default: `false`)
+
+#### API Endpoints
+
+The ASGI server provides the following endpoints:
+
+- `/`: Root endpoint providing basic server information
+- `/health`: Health check endpoint
+- `/docs`: OpenAPI documentation (provided by FastAPI)
+- `/redoc`: Alternative OpenAPI documentation (provided by FastAPI)
+- `/mt5/mcp`: The MCP endpoint for interacting with MetaTrader 5
 
 ### Installing for Claude Desktop
 
@@ -164,6 +204,22 @@ result = order_send(request)
 shutdown()
 ```
 
+## Integration with Other ASGI Applications
+
+The ASGI application can be integrated with other ASGI applications or frameworks like FastAPI or Starlette:
+
+```python
+# Example of integrating with another FastAPI application
+from fastapi import FastAPI
+from asgi import app as mt5_app
+
+# Create a parent FastAPI application
+parent_app = FastAPI()
+
+# Mount the MT5 MCP app under a specific path
+parent_app.mount("/trading", mt5_app)
+```
+
 ## Resources
 
 The server provides the following resources to help AI assistants understand how to use the MetaTrader 5 API:
@@ -200,6 +256,13 @@ mcp-metatrader5-server/
 │       ├── trading.py
 │       ├── main.py
 │       └── cli.py
+├── asgi.py  # ASGI server implementation
+├── docs/
+│   ├── getting_started.md
+│   ├── trading_guide.md
+│   ├── market_data_guide.md
+│   └── asgi_server.md  # Documentation for ASGI server
+├── main.py
 ├── run.py
 ├── README.md
 └── pyproject.toml
