@@ -214,14 +214,17 @@ class Deal(BaseModel):
 
 # Initialize MetaTrader 5 connection
 @mcp.tool()
-def initialize() -> bool:
+def initialize(path: Optional[str] = None) -> bool:
     """
     Initialize the MetaTrader 5 terminal.
     
+    Args:
+        path: Optional path to the MetaTrader 5 terminal executable.
+        
     Returns:
         bool: True if initialization was successful, False otherwise.
     """
-    if not mt5.initialize():
+    if not mt5.initialize(path=path):
         logger.error(f"MT5 initialization failed, error code: {mt5.last_error()}")
         return False
     
@@ -244,13 +247,6 @@ def shutdown() -> bool:
 # Login to MetaTrader 5 account
 @mcp.tool()
 def login(login: int, password: str, server: str) -> bool:
-
-    print("+++++++++++++++++++++++++++++++++++++++++++++")
-    print("login: ", login)
-    print("password: ", password)
-    print("server: ", server)
-    print("+++++++++++++++++++++++++++++++++++++++++++++")
-
     """
     Log in to the MetaTrader 5 trading account.
     
