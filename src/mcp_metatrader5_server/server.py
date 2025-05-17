@@ -244,6 +244,13 @@ def shutdown() -> bool:
 # Login to MetaTrader 5 account
 @mcp.tool()
 def login(login: int, password: str, server: str) -> bool:
+
+    print("+++++++++++++++++++++++++++++++++++++++++++++")
+    print("login: ", login)
+    print("password: ", password)
+    print("server: ", server)
+    print("+++++++++++++++++++++++++++++++++++++++++++++")
+
     """
     Log in to the MetaTrader 5 trading account.
     
