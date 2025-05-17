@@ -110,10 +110,6 @@ The ASGI server can be configured using environment variables:
 The ASGI server provides the following endpoints:
 
 - `/`: SSE transport MCP endpoint
-- `/info`: Server information endpoint
-- `/health`: Health check endpoint
-- `/docs`: OpenAPI documentation (provided by FastAPI)
-- `/redoc`: Alternative OpenAPI documentation (provided by FastAPI)
 - `/mt5/mcp`: Streamable HTTP transport MCP endpoint
 
 ### Installing for Claude Desktop
