@@ -50,12 +50,12 @@ uv run mt5mcp dev --host 0.0.0.0 --port 8080
 
 ### Running the ASGI Server
 
-The ASGI server implementation provides better integration with modern web frameworks and deployment options.
+The ASGI server implementation provides better integration with modern web frameworks and deployment options. The ASGI functionality is now built into the main server file.
 
 #### Direct Execution
 
 ```bash
-python asgi.py
+python mt5_server.py
 ```
 
 This will start a Uvicorn server on port 8000 (default) that hosts the MetaTrader 5 MCP server.
@@ -63,7 +63,7 @@ This will start a Uvicorn server on port 8000 (default) that hosts the MetaTrade
 #### Using Uvicorn Directly
 
 ```bash
-uvicorn asgi:app --host 0.0.0.0 --port 8000 --reload
+uvicorn mt5_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The `--reload` flag enables auto-reloading when the code changes, which is useful during development.
@@ -238,7 +238,7 @@ The ASGI application can be integrated with other ASGI applications or framework
 ```python
 # Example of integrating with another FastAPI application
 from fastapi import FastAPI
-from asgi import app as mt5_app
+from mt5_server import app as mt5_app
 
 # Create a parent FastAPI application
 parent_app = FastAPI()
@@ -283,7 +283,7 @@ mcp-metatrader5-server/
 │       ├── trading.py
 │       ├── main.py
 │       └── cli.py
-├── asgi.py  # ASGI server implementation
+├── mt5_server.py  # Main server with integrated ASGI functionality
 ├── docs/
 │   ├── getting_started.md
 │   ├── trading_guide.md

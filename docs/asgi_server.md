@@ -1,10 +1,10 @@
 # MetaTrader 5 MCP ASGI Server
 
-This document describes how to use the MetaTrader 5 MCP ASGI server implementation.
+This document describes how to use the MetaTrader 5 MCP ASGI server implementation. As of the latest version, the ASGI functionality has been consolidated into the main `mt5_server.py` file for simplified deployment and maintenance.
 
 ## Overview
 
-The ASGI server implementation provides an alternative way to deploy the MetaTrader 5 MCP server using the ASGI (Asynchronous Server Gateway Interface) protocol. This allows for better integration with modern Python web frameworks and deployment options.
+The ASGI server implementation provides an alternative way to deploy the MetaTrader 5 MCP server using the ASGI (Asynchronous Server Gateway Interface) protocol. This allows for better integration with modern Python web frameworks and deployment options. The ASGI functionality is now integrated directly into the main `mt5_server.py` file, eliminating the need for a separate ASGI module.
 
 ## Running the ASGI Server
 
@@ -12,10 +12,10 @@ There are multiple ways to run the ASGI server:
 
 ### Direct Execution
 
-The simplest way to run the server is to execute the `asgi.py` file directly:
+The simplest way to run the server is to execute the `mt5_server.py` file directly:
 
 ```bash
-python asgi.py
+python mt5_server.py
 ```
 
 This will start a Uvicorn server on port 8000 (default) that hosts the MetaTrader 5 MCP server.
@@ -25,7 +25,7 @@ This will start a Uvicorn server on port 8000 (default) that hosts the MetaTrade
 You can also run the server using Uvicorn directly:
 
 ```bash
-uvicorn asgi:app --host 0.0.0.0 --port 8000 --reload
+uvicorn mt5_server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The `--reload` flag enables auto-reloading when the code changes, which is useful during development.
@@ -35,7 +35,7 @@ The `--reload` flag enables auto-reloading when the code changes, which is usefu
 The ASGI application can be used with other ASGI servers like Hypercorn:
 
 ```bash
-hypercorn asgi:app --bind 0.0.0.0:8000
+hypercorn mt5_server:app --bind 0.0.0.0:8000
 ```
 
 ## Configuration
@@ -50,11 +50,10 @@ The ASGI server can be configured using environment variables:
 
 The ASGI server provides the following endpoints:
 
-- `/`: Root endpoint providing basic server information
-- `/health`: Health check endpoint
+- `/`: SSE transport MCP endpoint (for compatibility with existing clients)
+- `/mt5/mcp`: Streamable HTTP transport MCP endpoint
 - `/docs`: OpenAPI documentation (provided by FastAPI)
 - `/redoc`: Alternative OpenAPI documentation (provided by FastAPI)
-- `/mt5/mcp`: The MCP endpoint for interacting with MetaTrader 5
 
 ## Integration with Other Applications
 
@@ -63,7 +62,7 @@ The ASGI application can be integrated with other ASGI applications or framework
 ```python
 # Example of integrating with another FastAPI application
 from fastapi import FastAPI
-from asgi import app as mt5_app
+from mt5_server import app as mt5_app
 
 # Create a parent FastAPI application
 parent_app = FastAPI()

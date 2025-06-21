@@ -316,3 +316,63 @@ def get_version() -> Dict[str, Any]:
         "build": version[1],
         "date": version[2]
     }
+
+# ASGI App Setup - Create FastAPI application with MCP endpoints
+try:
+    from fastapi import FastAPI
+    
+    # Create ASGI apps for different transport methods
+    http_app = mcp.streamable_http_app(path="/mcp")
+    sse_app = mcp.sse_app(path="/")  # Root path for SSE to maintain compatibility with existing clients
+    
+    # Create main FastAPI application
+    app = FastAPI(
+        title="MetaTrader 5 MCP API",
+        description="API for interacting with MetaTrader 5 via Model Context Protocol",
+        version="0.1.0",
+        lifespan=http_app.router.lifespan_context,  # Required for proper initialization
+    )
+    
+    # Mount the MCP apps
+    app.mount("/mt5", http_app)  # For Streamable HTTP transport
+    app.mount("/", sse_app)      # For SSE transport (at root for compatibility)
+    
+    # Export the ASGI app
+    asgi_app = app
+    
+    logger.info("ASGI application configured successfully")
+    
+except ImportError:
+    logger.warning("FastAPI not available - ASGI functionality disabled")
+    app = None
+    asgi_app = None
+
+# Run the server with Uvicorn if executed directly
+if __name__ == "__main__":
+    if app is None:
+        logger.error("FastAPI not available. Please install with: pip install fastapi uvicorn")
+        exit(1)
+        
+    try:
+        import uvicorn
+        
+        # Get configuration from environment or use defaults
+        port = int(os.environ.get("MT5_MCP_PORT", 8000))
+        host = os.environ.get("MT5_MCP_HOST", "0.0.0.0")
+        dev_mode = os.environ.get("MT5_MCP_DEV_MODE", "false").lower() == "true"
+        
+        logger.info(f"Starting MetaTrader 5 MCP ASGI server at {host}:{port}")
+        if dev_mode:
+            logger.info("Development mode enabled - auto-reload active")
+        
+        # Run the server
+        uvicorn.run(
+            "mt5_server:app",
+            host=host,
+            port=port,
+            reload=dev_mode
+        )
+        
+    except ImportError:
+        logger.error("Uvicorn not available. Please install with: pip install uvicorn")
+        exit(1)
