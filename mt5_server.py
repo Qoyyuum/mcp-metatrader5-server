@@ -9,9 +9,23 @@ from typing import Dict, List, Optional, Union, Any
 from datetime import datetime
 import os
 
-import MetaTrader5 as mt5
-import pandas as pd
-import numpy as np
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    mt5 = None
+    MT5_AVAILABLE = False
+    
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+    
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 from fastmcp import FastMCP, Image
 from pydantic import BaseModel, Field
 
@@ -221,12 +235,21 @@ def initialize() -> bool:
     Returns:
         bool: True if initialization was successful, False otherwise.
     """
-    if not mt5.initialize():
-        logger.error(f"MT5 initialization failed, error code: {mt5.last_error()}")
-        return False
+    if not MT5_AVAILABLE:
+        logger.error("MetaTrader5 package is not available")
+        raise ValueError("MetaTrader5 package is not installed or available")
     
-    logger.info("MT5 initialized successfully")
-    return True
+    try:
+        if not mt5.initialize():
+            error_code = mt5.last_error()
+            logger.error(f"MT5 initialization failed, error code: {error_code}")
+            raise ValueError(f"MT5 initialization failed with error code: {error_code}")
+        
+        logger.info("MT5 initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Exception during MT5 initialization: {e}")
+        raise ValueError(f"MT5 initialization exception: {str(e)}")
 
 # Shutdown MetaTrader 5 connection
 @mcp.tool()
@@ -237,9 +260,17 @@ def shutdown() -> bool:
     Returns:
         bool: True if shutdown was successful.
     """
-    mt5.shutdown()
-    logger.info("MT5 connection shut down")
-    return True
+    if not MT5_AVAILABLE:
+        logger.warning("MetaTrader5 package is not available")
+        return True
+    
+    try:
+        mt5.shutdown()
+        logger.info("MT5 connection shut down")
+        return True
+    except Exception as e:
+        logger.error(f"Exception during MT5 shutdown: {e}")
+        return False
 
 # Login to MetaTrader 5 account
 @mcp.tool()
@@ -330,7 +361,7 @@ try:
         title="MetaTrader 5 MCP API",
         description="API for interacting with MetaTrader 5 via Model Context Protocol",
         version="0.1.0",
-        lifespan=http_app.router.lifespan_context,  # Required for proper initialization
+        # Remove problematic lifespan for now
     )
     
     # Mount the MCP apps
