@@ -237,5 +237,10 @@ if __name__ == "__main__":
     logger.info(f"Starting MetaTrader 5 MCP server at {host}:{port}")
     logger.info(f"MT5 Available: {MT5_AVAILABLE}")
     
-    # Use FastMCP's built-in server runner
-    mcp.run(host=host, port=port)
+    # Use uvicorn to serve the FastMCP server over HTTP
+    try:
+        import uvicorn
+        uvicorn.run(mcp, host=host, port=port)
+    except ImportError:
+        logger.error("uvicorn is required for HTTP transport. Install it with: pip install uvicorn")
+        raise

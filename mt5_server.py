@@ -388,7 +388,7 @@ except Exception as e:
     app = None
     asgi_app = None
 
-# Run the server with FastMCP's built-in runner
+# Run the server with uvicorn for HTTP transport
 if __name__ == "__main__":
     # Get configuration from environment or use defaults
     port = int(os.environ.get("MT5_MCP_PORT", 8000))
@@ -396,5 +396,10 @@ if __name__ == "__main__":
     
     logger.info(f"Starting MetaTrader 5 MCP server at {host}:{port}")
     
-    # Use FastMCP's built-in server runner which handles the task group properly
-    mcp.run(host=host, port=port)
+    # Use uvicorn to serve the FastMCP server over HTTP
+    try:
+        import uvicorn
+        uvicorn.run(mcp, host=host, port=port)
+    except ImportError:
+        logger.error("uvicorn is required for HTTP transport. Install it with: pip install uvicorn")
+        raise
