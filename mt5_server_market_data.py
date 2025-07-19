@@ -11,7 +11,8 @@ from datetime import datetime
 import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
-from fastmcp import FastMCP, Image
+from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from pydantic import BaseModel, Field
 
 # Import the main server instance

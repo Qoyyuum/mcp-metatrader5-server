@@ -12,7 +12,8 @@ import os
 import MetaTrader5 as mt5
 import pandas as pd
 import numpy as np
-from fastmcp import FastMCP, Image
+from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from pydantic import BaseModel, Field
 
 # Configure logging
@@ -23,11 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger("mt5-mcp-server")
 
 # Create the MCP server
-mcp = FastMCP(
-    "MetaTrader 5 MCP Server",
-    description="A Model Context Protocol server for MetaTrader 5 trading platform",
-    dependencies=["MetaTrader5", "pandas", "numpy", "fastmcp", "pydantic"],
-)
+mcp = FastMCP("MetaTrader 5 MCP Server")
 
 # Models for request/response data
 class SymbolInfo(BaseModel):

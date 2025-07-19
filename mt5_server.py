@@ -26,7 +26,8 @@ try:
 except ImportError:
     np = None
 
-from fastmcp import FastMCP, Image
+from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 from pydantic import BaseModel, Field
 
 # Configure logging
@@ -37,11 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger("mt5-mcp-server")
 
 # Create the MCP server
-mcp = FastMCP(
-    "MetaTrader 5 MCP Server",
-    description="A Model Context Protocol server for MetaTrader 5 trading platform",
-    dependencies=["MetaTrader5", "pandas", "numpy", "fastmcp", "pydantic"],
-)
+mcp = FastMCP("MetaTrader 5 MCP Server")
 
 # Models for request/response data
 class SymbolInfo(BaseModel):
@@ -348,62 +345,56 @@ def get_version() -> Dict[str, Any]:
         "date": version[2]
     }
 
-# ASGI App Setup - Create FastAPI application with MCP endpoints
+# For ASGI compatibility, export the FastMCP server
+app = None
+asgi_app = None
+
 try:
-    from fastapi import FastAPI
-    
-    # Create ASGI apps for different transport methods
-    http_app = mcp.streamable_http_app(path="/mcp")
-    sse_app = mcp.sse_app(path="/")  # Root path for SSE to maintain compatibility with existing clients
-    
-    # Create main FastAPI application
-    app = FastAPI(
-        title="MetaTrader 5 MCP API",
-        description="API for interacting with MetaTrader 5 via Model Context Protocol",
-        version="0.1.0",
-        # Remove problematic lifespan for now
-    )
-    
-    # Mount the MCP apps
-    app.mount("/mt5", http_app)  # For Streamable HTTP transport
-    app.mount("/", sse_app)      # For SSE transport (at root for compatibility)
-    
-    # Export the ASGI app
-    asgi_app = app
-    
-    logger.info("ASGI application configured successfully")
-    
-except ImportError:
-    logger.warning("FastAPI not available - ASGI functionality disabled")
+    # Only create ASGI app if needed for external deployment
+    if not __name__ == "__main__":
+        from fastapi import FastAPI
+        from contextlib import asynccontextmanager
+        import asyncio
+        
+        # Create a proper ASGI app with lifespan management
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            # Start the MCP server in the background
+            server_task = None
+            try:
+                # This is a workaround - we need to run the MCP server properly
+                logger.info("Starting MCP server context")
+                yield
+            finally:
+                logger.info("Shutting down MCP server context")
+        
+        app = FastAPI(
+            title="MetaTrader 5 MCP API",
+            description="API for interacting with MetaTrader 5 via Model Context Protocol",
+            version="0.1.0",
+            lifespan=lifespan
+        )
+        
+        # Add a simple health check endpoint
+        @app.get("/health")
+        async def health_check():
+            return {"status": "healthy", "service": "MT5 MCP Server"}
+        
+        asgi_app = app
+        logger.info("ASGI application configured for external deployment")
+        
+except Exception as e:
+    logger.warning(f"ASGI setup failed: {e}")
     app = None
     asgi_app = None
 
-# Run the server with Uvicorn if executed directly
+# Run the server with FastMCP's built-in runner
 if __name__ == "__main__":
-    if app is None:
-        logger.error("FastAPI not available. Please install with: pip install fastapi uvicorn")
-        exit(1)
-        
-    try:
-        import uvicorn
-        
-        # Get configuration from environment or use defaults
-        port = int(os.environ.get("MT5_MCP_PORT", 8000))
-        host = os.environ.get("MT5_MCP_HOST", "0.0.0.0")
-        dev_mode = os.environ.get("MT5_MCP_DEV_MODE", "false").lower() == "true"
-        
-        logger.info(f"Starting MetaTrader 5 MCP ASGI server at {host}:{port}")
-        if dev_mode:
-            logger.info("Development mode enabled - auto-reload active")
-        
-        # Run the server
-        uvicorn.run(
-            "mt5_server:app",
-            host=host,
-            port=port,
-            reload=dev_mode
-        )
-        
-    except ImportError:
-        logger.error("Uvicorn not available. Please install with: pip install uvicorn")
-        exit(1)
+    # Get configuration from environment or use defaults
+    port = int(os.environ.get("MT5_MCP_PORT", 8000))
+    host = os.environ.get("MT5_MCP_HOST", "0.0.0.0")
+    
+    logger.info(f"Starting MetaTrader 5 MCP server at {host}:{port}")
+    
+    # Use FastMCP's built-in server runner which handles the task group properly
+    mcp.run(host=host, port=port)

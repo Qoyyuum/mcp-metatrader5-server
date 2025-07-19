@@ -338,6 +338,31 @@ class MT5ServerTester:
         success_count = 0
         total_tests = 0
         
+        # Test server health first
+        try:
+            total_tests += 1
+            result = self.mcp_call("tools/call", {
+                "name": "test_server",
+                "arguments": {}
+            })
+            
+            if "result" in result:
+                print("✅ Server test tool works")
+                success_count += 1
+                # Show server info
+                try:
+                    content = result["result"]["content"][0]["text"]
+                    print(f"   Server info: {content}")
+                except:
+                    print(f"   Server response: {result['result']}")
+            elif "error" in result:
+                print(f"❌ Server test failed with error: {result['error']}")
+            else:
+                print(f"❌ Server test failed: {result}")
+                
+        except Exception as e:
+            print(f"❌ Server test error: {e}")
+
         # Test initialize tool
         try:
             total_tests += 1
@@ -349,6 +374,12 @@ class MT5ServerTester:
             if "result" in result:
                 print("✅ MT5 initialize tool works")
                 success_count += 1
+                # Show result details
+                try:
+                    content = result["result"]["content"][0]["text"]
+                    print(f"   Initialize result: {content}")
+                except:
+                    print(f"   Initialize response: {result['result']}")
             elif "error" in result:
                 print(f"❌ MT5 initialize failed with error: {result['error']}")
             else:
@@ -366,13 +397,13 @@ class MT5ServerTester:
             })
             
             if "result" in result:
+                print("✅ MT5 version tool works")
+                success_count += 1
                 try:
-                    version_info = result["result"]["content"][0]["text"]
-                    print(f"✅ MT5 version: {version_info}")
-                    success_count += 1
-                except (KeyError, IndexError):
-                    print(f"✅ MT5 version tool works: {result['result']}")
-                    success_count += 1
+                    content = result["result"]["content"][0]["text"]
+                    print(f"   Version info: {content}")
+                except:
+                    print(f"   Version response: {result['result']}")
             elif "error" in result:
                 print(f"❌ MT5 version failed with error: {result['error']}")
             else:
@@ -390,7 +421,7 @@ class MT5ServerTester:
             })
             
             if "result" in result:
-                print("✅ MT5 terminal info retrieved")
+                print("✅ MT5 terminal info tool works")
                 success_count += 1
             elif "error" in result:
                 print(f"❌ MT5 terminal info failed with error: {result['error']}")
