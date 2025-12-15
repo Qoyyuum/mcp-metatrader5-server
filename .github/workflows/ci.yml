@@ -99,7 +99,7 @@ jobs:
         uv build
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: dist
         path: dist/
@@ -131,7 +131,7 @@ jobs:
         mkdocs build --strict --config-file docs/mkdocs.yml
 
     - name: Upload docs artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: docs
         path: site/
