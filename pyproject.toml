@@ -20,7 +20,7 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
-    "fastmcp==2.14.0",
+    "fastmcp==2.14.4",
     "metatrader5==5.0.5430",
     "pandas>=2.3.3",
     "pydantic>=2.11.9",
