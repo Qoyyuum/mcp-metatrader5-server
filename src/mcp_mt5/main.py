@@ -280,6 +280,71 @@ class Deal(BaseModel):
     external_id: str
 
 
+def _get_supported_filling_mode(symbol: str, action: int | None = None) -> int:
+    """
+    Get the supported filling mode for a symbol.
+
+    Brokers support different order filling modes. This function checks the symbol's
+    filling_mode bitmask and returns the best available option.
+
+    Args:
+        symbol: Symbol name (e.g., "EURUSD", "BTCUSD")
+        action: Trade action type (optional). If mt5.TRADE_ACTION_PENDING (2),
+                always returns mt5.ORDER_FILLING_RETURN (2).
+
+    Returns:
+        int: Filling mode constant (mt5.ORDER_FILLING_FOK=0, mt5.ORDER_FILLING_IOC=1, mt5.ORDER_FILLING_RETURN=2)
+             Defaults to mt5.ORDER_FILLING_IOC if unable to determine.
+    """
+    # Pending orders always use RETURN filling mode
+    if action is not None and action == mt5.TRADE_ACTION_PENDING:
+        return mt5.ORDER_FILLING_RETURN
+
+    try:
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            return mt5.ORDER_FILLING_IOC  # Default to IOC
+
+        # filling_mode is a bitmask: 1=FOK, 2=IOC, 4=reserved (not used in standard MT5)
+        # Note: RETURN (2) is NOT a symbol filling mode - it's used for pending orders
+        filling_mask = getattr(symbol_info, "filling_mode", 0)
+
+        # Priority: IOC > FOK > RETURN (for non-market execution)
+        if filling_mask & 2:  # IOC supported?
+            return mt5.ORDER_FILLING_IOC
+        elif filling_mask & 1:  # FOK supported?
+            return mt5.ORDER_FILLING_FOK
+        else:
+            # For non-market execution symbols, RETURN may be valid
+            # SYMBOL_TRADE_EXECUTION_MARKET = 2 (not exposed in Python API)
+            trade_exemode = getattr(symbol_info, "trade_exemode", None)
+            if trade_exemode != 2:  # Not market execution
+                return mt5.ORDER_FILLING_RETURN
+            return mt5.ORDER_FILLING_IOC  # Default to IOC for market execution
+    except Exception:
+        return mt5.ORDER_FILLING_IOC  # Default to IOC on any error
+
+
+def _ensure_type_filling(request_dict: dict[str, Any]) -> None:
+    """
+    Ensure type_filling is set in the request dictionary.
+
+    Auto-detects the appropriate filling mode based on symbol and action
+    if not already provided by the user.
+
+    Args:
+        request_dict: The order request dictionary to modify in-place.
+    """
+    if "type_filling" in request_dict or "symbol" not in request_dict:
+        return
+
+    symbol = request_dict["symbol"]
+    action = request_dict.get("action")
+    filling_mode = _get_supported_filling_mode(symbol, action)
+    request_dict["type_filling"] = filling_mode
+    logger.info(f"Auto-selected filling mode {filling_mode} for {symbol}")
+
+
 def _format_timestamps_to_iso8601_utc(df: pd.DataFrame) -> None:
     """
     Convert timestamp columns in a DataFrame to ISO 8601 UTC format strings.
@@ -1017,6 +1082,9 @@ def order_send(request: OrderRequest) -> OrderResult:
     # MT5 doesn't accept None for optional parameters - they must be omitted entirely
     request_dict = request.model_dump(exclude_none=True)
 
+    # Auto-detect filling mode if not provided
+    _ensure_type_filling(request_dict)
+
     # Send order
     result = mt5.order_send(request_dict)
     if result is None:
@@ -1135,6 +1203,9 @@ def order_check(request: OrderRequest) -> dict[str, Any]:
     # Convert request to dictionary and exclude None values
     # MT5 doesn't accept None for optional parameters - they must be omitted entirely
     request_dict = request.model_dump(exclude_none=True)
+
+    # Auto-detect filling mode if not provided
+    _ensure_type_filling(request_dict)
 
     # Check order
     result = mt5.order_check(request_dict)
