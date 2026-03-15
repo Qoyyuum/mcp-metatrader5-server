@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Qoyyuum/mcp-metatrader5-server)
+
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/qoyyuum-mcp-metatrader5-server-badge.png)](https://mseep.ai/app/qoyyuum-mcp-metatrader5-server)
 
 [![codecov](https://codecov.io/github/Qoyyuum/mcp-metatrader5-server/graph/badge.svg?token=SRECTEZUAR)](https://codecov.io/github/Qoyyuum/mcp-metatrader5-server)
