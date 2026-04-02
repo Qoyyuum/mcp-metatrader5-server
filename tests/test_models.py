@@ -9,6 +9,7 @@ from mcp_mt5.main import (
     OrderRequest,
     Position,
     SymbolInfo,
+    _build_order_request,
 )
 
 
@@ -111,6 +112,98 @@ class TestOrderRequestModel:
         assert order.deviation is None
         assert order.magic is None
         assert order.comment is None
+
+    def test_build_order_request_from_request_wrapper(self):
+        """Test wrapped order payload normalization."""
+        wrapped = OrderRequest(
+            action=1,
+            symbol="EURUSD",
+            volume=0.1,
+            type=0,
+            price=1.10000,
+        )
+
+        order = _build_order_request(request=wrapped)
+
+        assert order == wrapped
+
+    def test_build_order_request_from_flat_fields(self):
+        """Test flat order payload normalization."""
+        order = _build_order_request(
+            action=1,
+            symbol="EURUSD",
+            volume=0.1,
+            type=0,
+            price=1.10000,
+        )
+
+        assert order.action == 1
+        assert order.symbol == "EURUSD"
+        assert order.volume == 0.1
+        assert order.type == 0
+        assert order.price == 1.10000
+
+    def test_build_order_request_rejects_mixed_payloads(self):
+        """Test wrapped and flat payloads cannot be mixed."""
+        wrapped = OrderRequest(
+            action=1,
+            symbol="EURUSD",
+            volume=0.1,
+            type=0,
+            price=1.10000,
+        )
+
+        with pytest.raises(ValueError, match="either request=\\{\\.\\.\\.\\} or flat"):
+            _build_order_request(
+                request=wrapped,
+                action=1,
+                symbol="EURUSD",
+                volume=0.1,
+                type=0,
+                price=1.10000,
+            )
+
+    def test_modify_pending_order_requires_order_and_price_only(self):
+        """Test modify pending payload does not require create-only fields."""
+        order = _build_order_request(
+            action=7,
+            order=34784473,
+            symbol="NZDUSD",
+            price=0.57464,
+            sl=0.57877,
+            tp=0.56638,
+        )
+
+        assert order.action == 7
+        assert order.order == 34784473
+        assert order.symbol == "NZDUSD"
+        assert order.price == 0.57464
+        assert order.volume is None
+        assert order.type is None
+
+    def test_delete_pending_order_requires_order_only(self):
+        """Test delete pending payload accepts order without create-only fields."""
+        order = _build_order_request(
+            action=8,
+            order=34784473,
+            symbol="NZDUSD",
+        )
+
+        assert order.action == 8
+        assert order.order == 34784473
+        assert order.symbol == "NZDUSD"
+        assert order.volume is None
+        assert order.type is None
+        assert order.price is None
+
+    def test_modify_pending_order_missing_order_fails(self):
+        """Test modify pending validation enforces order ticket."""
+        with pytest.raises(ValueError, match="Pending order modify requires: order"):
+            _build_order_request(
+                action=7,
+                symbol="NZDUSD",
+                price=0.57464,
+            )
 
 
 @pytest.mark.unit

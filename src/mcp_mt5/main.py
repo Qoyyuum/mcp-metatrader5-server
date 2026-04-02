@@ -5,7 +5,7 @@ from typing import Any
 import MetaTrader5 as mt5
 import pandas as pd
 from fastmcp import FastMCP
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +117,16 @@ class OrderRequest(BaseModel):
     Fields:
         action: Trade operation type as INTEGER:
             - 1: TRADE_ACTION_DEAL (Execute deal immediately)
-            - 2: TRADE_ACTION_PENDING (Place pending order)
+            - mt5.TRADE_ACTION_PENDING: Place pending order
             - 5: TRADE_ACTION_SLTP (Modify SL/TP)
             - 6: TRADE_ACTION_MODIFY (Modify pending order)
             - 8: TRADE_ACTION_REMOVE (Remove pending order)
 
         symbol: Symbol name (e.g., "EURUSD", "XAUUSD")
+
+        order: Pending order ticket for modify/remove operations
+
+        position: Position ticket for SL/TP modification operations
 
         volume: Trade volume in lots (e.g., 0.01, 0.1, 1.0)
 
@@ -149,10 +153,12 @@ class OrderRequest(BaseModel):
     """
 
     action: int
-    symbol: str
-    volume: float
-    type: int
-    price: float
+    order: int | None = None
+    position: int | None = None
+    symbol: str | None = None
+    volume: float | None = None
+    type: int | None = None
+    price: float | None = None
     sl: float | None = None
     tp: float | None = None
     deviation: int | None = None
@@ -160,11 +166,13 @@ class OrderRequest(BaseModel):
     comment: str | None = None
     type_time: int | None = None
     type_filling: int | None = None
+    expiration: int | None = None
+    stoplimit: float | None = None
 
     @field_validator("volume")
     @classmethod
-    def _vol_positive(cls, v: float) -> float:
-        if v <= 0:
+    def _vol_positive(cls, v: float | None) -> float | None:
+        if v is not None and v <= 0:
             raise ValueError("volume must be > 0 (in lots)")
         return v
 
@@ -189,6 +197,36 @@ class OrderRequest(BaseModel):
             raise ValueError(f"action must be one of {sorted(allowed)}")
         return v
 
+    @model_validator(mode="after")
+    def _validate_by_action(self) -> "OrderRequest":
+        if self.action in {mt5.TRADE_ACTION_DEAL, mt5.TRADE_ACTION_PENDING}:
+            missing = [
+                name
+                for name in ("symbol", "volume", "type", "price")
+                if getattr(self, name) is None
+            ]
+            if missing:
+                raise ValueError(
+                    "Create/deal orders require: " + ", ".join(missing)
+                )
+
+        elif self.action == mt5.TRADE_ACTION_MODIFY:
+            missing = [name for name in ("order", "price") if getattr(self, name) is None]
+            if missing:
+                raise ValueError("Pending order modify requires: " + ", ".join(missing))
+
+        elif self.action == mt5.TRADE_ACTION_REMOVE:
+            if self.order is None:
+                raise ValueError("Pending order remove requires: order")
+
+        elif self.action == mt5.TRADE_ACTION_SLTP:
+            if self.position is None:
+                raise ValueError("SL/TP modification requires: position")
+            if self.sl is None and self.tp is None:
+                raise ValueError("SL/TP modification requires at least one of: sl, tp")
+
+        return self
+
 
 class OrderResult(BaseModel):
     """Order execution result"""
@@ -204,6 +242,69 @@ class OrderResult(BaseModel):
     request_id: int
     retcode_external: int
     request: dict[str, Any]
+
+
+def _build_order_request(
+    request: OrderRequest | None = None,
+    *,
+    order: int | None = None,
+    position: int | None = None,
+    action: int | None = None,
+    symbol: str | None = None,
+    volume: float | None = None,
+    type: int | None = None,
+    price: float | None = None,
+    sl: float | None = None,
+    tp: float | None = None,
+    deviation: int | None = None,
+    magic: int | None = None,
+    comment: str | None = None,
+    type_time: int | None = None,
+    type_filling: int | None = None,
+    expiration: int | None = None,
+    stoplimit: float | None = None,
+) -> OrderRequest:
+    """
+    Normalize wrapped and flat order payloads into a single OrderRequest.
+
+    This allows HTTP clients to call order tools using either:
+    - request={...}
+    - flat top-level fields such as action, symbol, volume, type, and price
+    """
+    flat_payload = {
+        "order": order,
+        "position": position,
+        "action": action,
+        "symbol": symbol,
+        "volume": volume,
+        "type": type,
+        "price": price,
+        "sl": sl,
+        "tp": tp,
+        "deviation": deviation,
+        "magic": magic,
+        "comment": comment,
+        "type_time": type_time,
+        "type_filling": type_filling,
+        "expiration": expiration,
+        "stoplimit": stoplimit,
+    }
+    has_flat_fields = any(value is not None for value in flat_payload.values())
+
+    if request is not None and has_flat_fields:
+        raise ValueError(
+            "Pass either request={...} or flat top-level order fields, not both."
+        )
+
+    if request is not None:
+        return request
+
+    if not has_flat_fields:
+        raise ValueError(
+            "Order parameters are required. Pass either request={...} or flat top-level fields."
+        )
+
+    return OrderRequest(**{key: value for key, value in flat_payload.items() if value is not None})
 
 
 class Position(BaseModel):
@@ -289,7 +390,7 @@ def _get_supported_filling_mode(symbol: str, action: int | None = None) -> int:
 
     Args:
         symbol: Symbol name (e.g., "EURUSD", "BTCUSD")
-        action: Trade action type (optional). If mt5.TRADE_ACTION_PENDING (2),
+        action: Trade action type (optional). If mt5.TRADE_ACTION_PENDING,
                 always returns mt5.ORDER_FILLING_RETURN (2).
 
     Returns:
@@ -338,8 +439,11 @@ def _ensure_type_filling(request_dict: dict[str, Any]) -> None:
     if "type_filling" in request_dict or "symbol" not in request_dict:
         return
 
-    symbol = request_dict["symbol"]
     action = request_dict.get("action")
+    if action not in {mt5.TRADE_ACTION_DEAL, mt5.TRADE_ACTION_PENDING}:
+        return
+
+    symbol = request_dict["symbol"]
     filling_mode = _get_supported_filling_mode(symbol, action)
     request_dict["type_filling"] = filling_mode
     logger.info(f"Auto-selected filling mode {filling_mode} for {symbol}")
@@ -995,16 +1099,34 @@ def get_tick_flags() -> str:
 
 # Send order
 @mcp.tool()
-def order_send(request: OrderRequest) -> OrderResult:
+def order_send(
+    request: OrderRequest | None = None,
+    order: int | None = None,
+    position: int | None = None,
+    action: int | None = None,
+    symbol: str | None = None,
+    volume: float | None = None,
+    type: int | None = None,
+    price: float | None = None,
+    sl: float | None = None,
+    tp: float | None = None,
+    deviation: int | None = None,
+    magic: int | None = None,
+    comment: str | None = None,
+    type_time: int | None = None,
+    type_filling: int | None = None,
+    expiration: int | None = None,
+    stoplimit: float | None = None,
+) -> OrderResult:
     """
     Send an order to the trade server.
 
     CRITICAL REQUIREMENTS:
-    1. Pass order fields DIRECTLY - do NOT wrap in "request" key
+    1. Pass either request={...} OR flat top-level order fields
     2. Use INTEGER constants for action, type, type_filling - NO STRINGS
     3. Volume is in LOTS (0.01, 0.1, 1.0), NOT contract units (100000)
     4. Do NOT include unsupported fields like "group"
-    5. action must be 1 or 2 (NOT 0)
+    5. action must use MT5 constants from your installed library
 
     Common Mistakes to Avoid:
     - ❌ {"request": {"action": 1, ...}} → ✅ {"action": 1, ...}
@@ -1017,7 +1139,7 @@ def order_send(request: OrderRequest) -> OrderResult:
     Args:
         request: OrderRequest object with these fields:
             REQUIRED:
-            - action (int): 1=TRADE_ACTION_DEAL, 2=TRADE_ACTION_PENDING
+            - action (int): MT5 trade action constant, e.g. 1=DEAL, 5=PENDING
             - symbol (str): e.g., "EURUSD"
             - volume (float): Lots, e.g., 0.01 (micro), 0.1 (mini), 1.0 (standard)
             - type (int): 0=BUY, 1=SELL, 2=BUY_LIMIT, 3=SELL_LIMIT, etc.
@@ -1030,7 +1152,7 @@ def order_send(request: OrderRequest) -> OrderResult:
             - magic (int): EA identifier
             - comment (str): Max 31 characters
             - type_time (int): Expiration type
-            - type_filling (int): 0=FOK, 1=IOC, 2=RETURN (omit to use default)
+            - type_filling (int): 0=FOK, 1=IOC, 2=RETURN (omit to auto-detect)
 
     Returns:
         OrderResult: Order execution result with return code, deal, order info.
@@ -1061,7 +1183,7 @@ def order_send(request: OrderRequest) -> OrderResult:
 
     Example 3 - Buy Limit Order (pending):
         {
-            "action": 2,
+            "action": 5,
             "symbol": "EURUSD",
             "volume": 0.1,
             "type": 2,
@@ -1078,6 +1200,26 @@ def order_send(request: OrderRequest) -> OrderResult:
             }
         }
     """
+    request = _build_order_request(
+        request,
+        order=order,
+        position=position,
+        action=action,
+        symbol=symbol,
+        volume=volume,
+        type=type,
+        price=price,
+        sl=sl,
+        tp=tp,
+        deviation=deviation,
+        magic=magic,
+        comment=comment,
+        type_time=type_time,
+        type_filling=type_filling,
+        expiration=expiration,
+        stoplimit=stoplimit,
+    )
+
     # Convert request to dictionary and exclude None values
     # MT5 doesn't accept None for optional parameters - they must be omitted entirely
     request_dict = request.model_dump(exclude_none=True)
@@ -1163,13 +1305,31 @@ def order_send(request: OrderRequest) -> OrderResult:
 
 # Check order
 @mcp.tool()
-def order_check(request: OrderRequest) -> dict[str, Any]:
+def order_check(
+    request: OrderRequest | None = None,
+    order: int | None = None,
+    position: int | None = None,
+    action: int | None = None,
+    symbol: str | None = None,
+    volume: float | None = None,
+    type: int | None = None,
+    price: float | None = None,
+    sl: float | None = None,
+    tp: float | None = None,
+    deviation: int | None = None,
+    magic: int | None = None,
+    comment: str | None = None,
+    type_time: int | None = None,
+    type_filling: int | None = None,
+    expiration: int | None = None,
+    stoplimit: float | None = None,
+) -> dict[str, Any]:
     """
     Check if an order can be placed with the specified parameters.
 
     Use this BEFORE order_send() to validate the order without executing it.
     Follows the same requirements as order_send():
-    - request must be an OBJECT (dict), not a JSON string
+    - request may be passed as request={...} or as flat top-level fields
     - Use INTEGER constants for action, type, type_filling
     - Volume in LOTS (0.01, 0.1, 1.0), not contract units
 
@@ -1200,6 +1360,26 @@ def order_check(request: OrderRequest) -> dict[str, Any]:
             # OK to send the order
             order_send(request={...})
     """
+    request = _build_order_request(
+        request,
+        order=order,
+        position=position,
+        action=action,
+        symbol=symbol,
+        volume=volume,
+        type=type,
+        price=price,
+        sl=sl,
+        tp=tp,
+        deviation=deviation,
+        magic=magic,
+        comment=comment,
+        type_time=type_time,
+        type_filling=type_filling,
+        expiration=expiration,
+        stoplimit=stoplimit,
+    )
+
     # Convert request to dictionary and exclude None values
     # MT5 doesn't accept None for optional parameters - they must be omitted entirely
     request_dict = request.model_dump(exclude_none=True)

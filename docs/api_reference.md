@@ -390,7 +390,7 @@ Trade action constants (DEAL, PENDING, SLTP, MODIFY, REMOVE, CLOSE_BY).
 
 ### Trade Actions
 - `0` - TRADE_ACTION_DEAL (Market order)
-- `1` - TRADE_ACTION_PENDING (Pending order)
+- `5` - TRADE_ACTION_PENDING (Pending order)
 - `2` - TRADE_ACTION_SLTP (Modify SL/TP)
 - `3` - TRADE_ACTION_MODIFY (Modify order)
 - `4` - TRADE_ACTION_REMOVE (Remove order)
