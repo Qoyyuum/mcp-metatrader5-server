@@ -90,7 +90,7 @@ Ask the AI assistant:
 The AI will:
 1. Get the current ask price using `get_symbol_info_tick("EURUSD")`
 2. Create an order request with:
-   - `action`: TRADE_ACTION_DEAL (0)
+   - `action`: TRADE_ACTION_DEAL (1)
    - `symbol`: "EURUSD"
    - `volume`: 0.1
    - `type`: ORDER_TYPE_BUY (0)
