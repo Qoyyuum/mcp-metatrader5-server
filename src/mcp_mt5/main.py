@@ -241,6 +241,24 @@ class OrderRequest(BaseModel):
                     "Create/deal orders require: " + ", ".join(missing)
                 )
 
+            if self.action == mt5.TRADE_ACTION_PENDING:
+                stop_limit_types = {
+                    mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+                    mt5.ORDER_TYPE_SELL_STOP_LIMIT,
+                }
+                if self.type in stop_limit_types and self.stoplimit is None:
+                    raise ValueError(
+                        "Stop-limit pending orders require: stoplimit"
+                    )
+
+                if (
+                    self.type_time == mt5.ORDER_TIME_SPECIFIED
+                    and self.expiration is None
+                ):
+                    raise ValueError(
+                        "Pending orders with ORDER_TIME_SPECIFIED require: expiration"
+                    )
+
         elif self.action == mt5.TRADE_ACTION_MODIFY:
             missing = [name for name in ("order", "price") if getattr(self, name) is None]
             if missing:
