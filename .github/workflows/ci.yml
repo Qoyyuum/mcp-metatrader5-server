@@ -39,7 +39,7 @@ jobs:
         uv run pytest -v -m unit --cov=mcp_mt5 --cov-report=xml --cov-report=term
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       if: matrix.python-version == '3.13'
       with:
         files: ./coverage.xml
