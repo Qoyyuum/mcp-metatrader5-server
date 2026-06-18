@@ -2,7 +2,7 @@
 
 from .main import mcp
 
-__version__ = "0.1.4"
+__version__ = "0.1.8"
 __all__ = ["main", "mcp"]
 
 

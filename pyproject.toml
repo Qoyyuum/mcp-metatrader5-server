@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-metatrader5-server"
-version = "0.1.7"
+version = "0.1.8"
 description = "A Model Context Protocol (MCP) server for MetaTrader 5"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
     {name = "Abdul Qoyyuum"}
 ]
