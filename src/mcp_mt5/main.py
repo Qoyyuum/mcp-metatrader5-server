@@ -237,9 +237,7 @@ class OrderRequest(BaseModel):
                 if getattr(self, name) is None
             ]
             if missing:
-                raise ValueError(
-                    "Create/deal orders require: " + ", ".join(missing)
-                )
+                raise ValueError("Create/deal orders require: " + ", ".join(missing))
 
             if self.action == mt5.TRADE_ACTION_PENDING:
                 stop_limit_types = {
@@ -247,17 +245,10 @@ class OrderRequest(BaseModel):
                     mt5.ORDER_TYPE_SELL_STOP_LIMIT,
                 }
                 if self.type in stop_limit_types and self.stoplimit is None:
-                    raise ValueError(
-                        "Stop-limit pending orders require: stoplimit"
-                    )
+                    raise ValueError("Stop-limit pending orders require: stoplimit")
 
-                if (
-                    self.type_time == mt5.ORDER_TIME_SPECIFIED
-                    and self.expiration is None
-                ):
-                    raise ValueError(
-                        "Pending orders with ORDER_TIME_SPECIFIED require: expiration"
-                    )
+                if self.type_time == mt5.ORDER_TIME_SPECIFIED and self.expiration is None:
+                    raise ValueError("Pending orders with ORDER_TIME_SPECIFIED require: expiration")
 
         elif self.action == mt5.TRADE_ACTION_MODIFY:
             missing = [name for name in ("order", "price") if getattr(self, name) is None]
@@ -275,9 +266,7 @@ class OrderRequest(BaseModel):
                 raise ValueError("SL/TP modification requires at least one of: sl, tp")
 
         elif self.action == mt5.TRADE_ACTION_CLOSE_BY:
-            missing = [
-                name for name in ("position", "position_by") if getattr(self, name) is None
-            ]
+            missing = [name for name in ("position", "position_by") if getattr(self, name) is None]
             if missing:
                 raise ValueError("Close-by operation requires: " + ", ".join(missing))
 
