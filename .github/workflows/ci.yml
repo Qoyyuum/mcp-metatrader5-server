@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
     - name: Checkout code
@@ -40,7 +40,7 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v7
-      if: matrix.python-version == '3.13'
+      if: matrix.python-version == '3.14'
       with:
         files: ./coverage.xml
         flags: unittests
@@ -60,7 +60,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
-        python-version: "3.13"
+        python-version: "3.14"
 
     - name: Install uv
       uses: astral-sh/setup-uv@v7
@@ -89,7 +89,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
-        python-version: "3.13"
+        python-version: "3.14"
 
     - name: Install uv
       uses: astral-sh/setup-uv@v7
@@ -115,7 +115,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
-        python-version: "3.13"
+        python-version: "3.14"
 
     - name: Install uv
       uses: astral-sh/setup-uv@v7
