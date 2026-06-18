@@ -219,7 +219,7 @@ Send an order to the trade server.
 **OrderRequest Model:**
 ```python
 {
-    "action": int,        # TRADE_ACTION_DEAL (0) for market orders
+    "action": int,        # TRADE_ACTION_DEAL (1) for market orders
     "symbol": str,        # Symbol name
     "volume": float,      # Lot size
     "type": int,          # ORDER_TYPE_BUY (0) or ORDER_TYPE_SELL (1)
@@ -240,7 +240,7 @@ Send an order to the trade server.
 **Example:**
 ```python
 request = {
-    "action": 0,  # TRADE_ACTION_DEAL
+    "action": 1,  # TRADE_ACTION_DEAL
     "symbol": "EURUSD",
     "volume": 0.1,
     "type": 0,  # ORDER_TYPE_BUY
@@ -382,6 +382,9 @@ Trade action constants (DEAL, PENDING, SLTP, MODIFY, REMOVE, CLOSE_BY).
 - `3` - ORDER_TYPE_SELL_LIMIT
 - `4` - ORDER_TYPE_BUY_STOP
 - `5` - ORDER_TYPE_SELL_STOP
+- `6` - ORDER_TYPE_BUY_STOP_LIMIT
+- `7` - ORDER_TYPE_SELL_STOP_LIMIT
+- `8` - ORDER_TYPE_CLOSE_BY
 
 ### Order Filling Types
 - `0` - ORDER_FILLING_FOK (Fill or Kill)
@@ -389,9 +392,9 @@ Trade action constants (DEAL, PENDING, SLTP, MODIFY, REMOVE, CLOSE_BY).
 - `2` - ORDER_FILLING_RETURN
 
 ### Trade Actions
-- `0` - TRADE_ACTION_DEAL (Market order)
-- `1` - TRADE_ACTION_PENDING (Pending order)
-- `2` - TRADE_ACTION_SLTP (Modify SL/TP)
-- `3` - TRADE_ACTION_MODIFY (Modify order)
-- `4` - TRADE_ACTION_REMOVE (Remove order)
-- `5` - TRADE_ACTION_CLOSE_BY (Close by opposite position)
+- `1` - TRADE_ACTION_DEAL (Market order)
+- `5` - TRADE_ACTION_PENDING (Pending order)
+- `6` - TRADE_ACTION_SLTP (Modify SL/TP)
+- `7` - TRADE_ACTION_MODIFY (Modify order)
+- `8` - TRADE_ACTION_REMOVE (Remove order)
+- `10` - TRADE_ACTION_CLOSE_BY (Close by opposite position)

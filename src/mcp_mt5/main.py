@@ -5,15 +5,38 @@ from typing import Any
 import MetaTrader5 as mt5
 import pandas as pd
 from fastmcp import FastMCP
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "MetaTrader 5 MCP Server",
     instructions="""
-    This server is used to control MetaTrader 5 terminal.
-    It provides a simple interface to interact with MetaTrader 5 terminal.
+    This server controls the MetaTrader 5 terminal via its Python API.
+
+    IMPORTANT - REQUIRED SETUP SEQUENCE:
+    Before calling ANY other tool, you MUST call initialize() first to establish
+    the connection to the MT5 terminal. Without this, all other tools will fail
+    with a 'No IPC connection' error.
+
+    Typical usage sequence:
+    1. initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+       - Must be called first, every time the server starts
+       - Use the actual path to the MT5 terminal executable on the user's machine
+    2. login(login=..., password=..., server=...) [optional]
+       - Only needed if the terminal is not already logged in
+    3. Now you can call any other tools: get_account_info(), order_send(), etc.
+
+    Common MT5 terminal paths:
+    - "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
+    - "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
+
+    If initialize() fails or you are unsure of the path, ask the user:
+    "Where is your MetaTrader 5 terminal installed? Please provide the full path
+    to terminal64.exe (e.g. C:\\Program Files\\MetaTrader 5\\terminal64.exe)"
+
+    All action and type fields require INTEGER constants, not strings.
+    Volume is always in LOTS (e.g. 0.01, 0.1, 1.0).
     """,
 )
 
@@ -117,12 +140,19 @@ class OrderRequest(BaseModel):
     Fields:
         action: Trade operation type as INTEGER:
             - 1: TRADE_ACTION_DEAL (Execute deal immediately)
-            - 2: TRADE_ACTION_PENDING (Place pending order)
-            - 5: TRADE_ACTION_SLTP (Modify SL/TP)
-            - 6: TRADE_ACTION_MODIFY (Modify pending order)
+            - 5: TRADE_ACTION_PENDING (Place pending order)
+            - 6: TRADE_ACTION_SLTP (Modify SL/TP)
+            - 7: TRADE_ACTION_MODIFY (Modify pending order)
             - 8: TRADE_ACTION_REMOVE (Remove pending order)
+            - 10: TRADE_ACTION_CLOSE_BY (Close by opposite position)
 
         symbol: Symbol name (e.g., "EURUSD", "XAUUSD")
+
+        order: Pending order ticket for modify/remove operations
+
+        position: Position ticket for SL/TP modification operations
+
+        position_by: Opposite position ticket for close-by operations
 
         volume: Trade volume in lots (e.g., 0.01, 0.1, 1.0)
 
@@ -133,6 +163,9 @@ class OrderRequest(BaseModel):
             - 3: ORDER_TYPE_SELL_LIMIT (Sell limit order)
             - 4: ORDER_TYPE_BUY_STOP (Buy stop order)
             - 5: ORDER_TYPE_SELL_STOP (Sell stop order)
+            - 6: ORDER_TYPE_BUY_STOP_LIMIT (Buy stop-limit order)
+            - 7: ORDER_TYPE_SELL_STOP_LIMIT (Sell stop-limit order)
+            - 8: ORDER_TYPE_CLOSE_BY (Close by opposite position)
 
         price: Order price (use current ask/bid for market orders)
 
@@ -149,10 +182,13 @@ class OrderRequest(BaseModel):
     """
 
     action: int
-    symbol: str
-    volume: float
-    type: int
-    price: float
+    order: int | None = None
+    position: int | None = None
+    position_by: int | None = None
+    symbol: str | None = None
+    volume: float | None = None
+    type: int | None = None
+    price: float | None = None
     sl: float | None = None
     tp: float | None = None
     deviation: int | None = None
@@ -160,11 +196,13 @@ class OrderRequest(BaseModel):
     comment: str | None = None
     type_time: int | None = None
     type_filling: int | None = None
+    expiration: int | None = None
+    stoplimit: float | None = None
 
     @field_validator("volume")
     @classmethod
-    def _vol_positive(cls, v: float) -> float:
-        if v <= 0:
+    def _vol_positive(cls, v: float | None) -> float | None:
+        if v is not None and v <= 0:
             raise ValueError("volume must be > 0 (in lots)")
         return v
 
@@ -184,10 +222,66 @@ class OrderRequest(BaseModel):
             mt5.TRADE_ACTION_SLTP,
             mt5.TRADE_ACTION_MODIFY,
             mt5.TRADE_ACTION_REMOVE,
+            mt5.TRADE_ACTION_CLOSE_BY,
         }
         if v not in allowed:
             raise ValueError(f"action must be one of {sorted(allowed)}")
         return v
+
+    @model_validator(mode="after")
+    def _validate_by_action(self) -> "OrderRequest":
+        if self.action in {mt5.TRADE_ACTION_DEAL, mt5.TRADE_ACTION_PENDING}:
+            missing = [
+                name
+                for name in ("symbol", "volume", "type", "price")
+                if getattr(self, name) is None
+            ]
+            if missing:
+                raise ValueError(
+                    "Create/deal orders require: " + ", ".join(missing)
+                )
+
+            if self.action == mt5.TRADE_ACTION_PENDING:
+                stop_limit_types = {
+                    mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+                    mt5.ORDER_TYPE_SELL_STOP_LIMIT,
+                }
+                if self.type in stop_limit_types and self.stoplimit is None:
+                    raise ValueError(
+                        "Stop-limit pending orders require: stoplimit"
+                    )
+
+                if (
+                    self.type_time == mt5.ORDER_TIME_SPECIFIED
+                    and self.expiration is None
+                ):
+                    raise ValueError(
+                        "Pending orders with ORDER_TIME_SPECIFIED require: expiration"
+                    )
+
+        elif self.action == mt5.TRADE_ACTION_MODIFY:
+            missing = [name for name in ("order", "price") if getattr(self, name) is None]
+            if missing:
+                raise ValueError("Pending order modify requires: " + ", ".join(missing))
+
+        elif self.action == mt5.TRADE_ACTION_REMOVE:
+            if self.order is None:
+                raise ValueError("Pending order remove requires: order")
+
+        elif self.action == mt5.TRADE_ACTION_SLTP:
+            if self.position is None:
+                raise ValueError("SL/TP modification requires: position")
+            if self.sl is None and self.tp is None:
+                raise ValueError("SL/TP modification requires at least one of: sl, tp")
+
+        elif self.action == mt5.TRADE_ACTION_CLOSE_BY:
+            missing = [
+                name for name in ("position", "position_by") if getattr(self, name) is None
+            ]
+            if missing:
+                raise ValueError("Close-by operation requires: " + ", ".join(missing))
+
+        return self
 
 
 class OrderResult(BaseModel):
@@ -289,7 +383,7 @@ def _get_supported_filling_mode(symbol: str, action: int | None = None) -> int:
 
     Args:
         symbol: Symbol name (e.g., "EURUSD", "BTCUSD")
-        action: Trade action type (optional). If mt5.TRADE_ACTION_PENDING (2),
+        action: Trade action type (optional). If mt5.TRADE_ACTION_PENDING (5),
                 always returns mt5.ORDER_FILLING_RETURN (2).
 
     Returns:
@@ -338,8 +432,11 @@ def _ensure_type_filling(request_dict: dict[str, Any]) -> None:
     if "type_filling" in request_dict or "symbol" not in request_dict:
         return
 
-    symbol = request_dict["symbol"]
     action = request_dict.get("action")
+    if action not in {mt5.TRADE_ACTION_DEAL, mt5.TRADE_ACTION_PENDING}:
+        return
+
+    symbol = request_dict["symbol"]
     filling_mode = _get_supported_filling_mode(symbol, action)
     request_dict["type_filling"] = filling_mode
     logger.info(f"Auto-selected filling mode {filling_mode} for {symbol}")
@@ -1000,15 +1097,14 @@ def order_send(request: OrderRequest) -> OrderResult:
     Send an order to the trade server.
 
     CRITICAL REQUIREMENTS:
-    1. Pass order fields DIRECTLY - do NOT wrap in "request" key
+    1. Pass the order fields inside request={...}
     2. Use INTEGER constants for action, type, type_filling - NO STRINGS
     3. Volume is in LOTS (0.01, 0.1, 1.0), NOT contract units (100000)
     4. Do NOT include unsupported fields like "group"
-    5. action must be 1 or 2 (NOT 0)
+    5. action must use MT5 constants from your installed library
 
     Common Mistakes to Avoid:
-    - ❌ {"request": {"action": 1, ...}} → ✅ {"action": 1, ...}
-    - ❌ "action": 0 → ✅ "action": 1 (for market) or 2 (for pending)
+    - ❌ "action": 0 → ✅ "action": 1 (for market) or 5 (for pending)
     - ❌ "action": "buy" → ✅ "action": 1
     - ❌ "type": "limit" → ✅ "type": 2
     - ❌ "volume": 100000 → ✅ "volume": 0.1
@@ -1017,7 +1113,7 @@ def order_send(request: OrderRequest) -> OrderResult:
     Args:
         request: OrderRequest object with these fields:
             REQUIRED:
-            - action (int): 1=TRADE_ACTION_DEAL, 2=TRADE_ACTION_PENDING
+            - action (int): MT5 trade action constant, e.g. 1=DEAL, 5=PENDING
             - symbol (str): e.g., "EURUSD"
             - volume (float): Lots, e.g., 0.01 (micro), 0.1 (mini), 1.0 (standard)
             - type (int): 0=BUY, 1=SELL, 2=BUY_LIMIT, 3=SELL_LIMIT, etc.
@@ -1030,7 +1126,7 @@ def order_send(request: OrderRequest) -> OrderResult:
             - magic (int): EA identifier
             - comment (str): Max 31 characters
             - type_time (int): Expiration type
-            - type_filling (int): 0=FOK, 1=IOC, 2=RETURN (omit to use default)
+            - type_filling (int): 0=FOK, 1=IOC, 2=RETURN (omit to auto-detect)
 
     Returns:
         OrderResult: Order execution result with return code, deal, order info.
@@ -1061,7 +1157,7 @@ def order_send(request: OrderRequest) -> OrderResult:
 
     Example 3 - Buy Limit Order (pending):
         {
-            "action": 2,
+            "action": 5,
             "symbol": "EURUSD",
             "volume": 0.1,
             "type": 2,
@@ -1070,13 +1166,6 @@ def order_send(request: OrderRequest) -> OrderResult:
             "tp": 1.3050
         }
 
-    WRONG - Do NOT do this:
-        {
-            "request": {          ← Extra nesting!
-                "action": 1,
-                ...
-            }
-        }
     """
     # Convert request to dictionary and exclude None values
     # MT5 doesn't accept None for optional parameters - they must be omitted entirely

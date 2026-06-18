@@ -112,6 +112,48 @@ class TestOrderRequestModel:
         assert order.magic is None
         assert order.comment is None
 
+    def test_modify_pending_order_requires_order_and_price_only(self):
+        """Test modify pending payload does not require create-only fields."""
+        order = OrderRequest(
+            action=7,
+            order=34784473,
+            symbol="NZDUSD",
+            price=0.57464,
+            sl=0.57877,
+            tp=0.56638,
+        )
+
+        assert order.action == 7
+        assert order.order == 34784473
+        assert order.symbol == "NZDUSD"
+        assert order.price == 0.57464
+        assert order.volume is None
+        assert order.type is None
+
+    def test_delete_pending_order_requires_order_only(self):
+        """Test delete pending payload accepts order without create-only fields."""
+        order = OrderRequest(
+            action=8,
+            order=34784473,
+            symbol="NZDUSD",
+        )
+
+        assert order.action == 8
+        assert order.order == 34784473
+        assert order.symbol == "NZDUSD"
+        assert order.volume is None
+        assert order.type is None
+        assert order.price is None
+
+    def test_modify_pending_order_missing_order_fails(self):
+        """Test modify pending validation enforces order ticket."""
+        with pytest.raises(ValueError, match="Pending order modify requires: order"):
+            OrderRequest(
+                action=7,
+                symbol="NZDUSD",
+                price=0.57464,
+            )
+
 
 @pytest.mark.unit
 class TestSymbolInfoModel:
