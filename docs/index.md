@@ -118,6 +118,7 @@ Or manually configure `claude_desktop_config.json`:
 - `order_check(request)` - Check order validity
 - `positions_get()` - Get open positions
 - `positions_get_by_ticket(ticket)` - Get position by ticket
+- `close_position(ticket)` - Close an open position by ticket
 - `orders_get()` - Get active orders
 - `orders_get_by_ticket(ticket)` - Get order by ticket
 - `history_orders_get()` - Get historical orders

@@ -179,6 +179,7 @@ Add this to your `claude_desktop_config.json` or whatever LLM config file:
 - `order_check(request)`: Check if an order can be placed with the specified parameters
 - `positions_get(symbol, group)`: Get open positions
 - `positions_get_by_ticket(ticket)`: Get an open position by its ticket
+- `close_position(ticket, deviation, magic, comment, type_filling)`: Close an open position by ticket
 - `orders_get(symbol, group)`: Get active orders
 - `orders_get_by_ticket(ticket)`: Get an active order by its ticket
 - `history_orders_get(symbol, group, ticket, position, from_date, to_date)`: Get orders from history
