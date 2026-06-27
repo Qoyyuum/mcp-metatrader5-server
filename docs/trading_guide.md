@@ -97,6 +97,16 @@ result = order_send(request)
 ## Example: Closing a Position
 
 ```python
+from mt5_server import close_position
+
+# Close the position by ticket
+result = close_position(ticket=123456, deviation=20)
+```
+
+For advanced use cases, you can also close a position through `order_send()`
+by sending the opposite market order with the original `position` ticket:
+
+```python
 from mt5_server import OrderRequest
 
 # Get the position

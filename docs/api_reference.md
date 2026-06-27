@@ -226,6 +226,9 @@ Send an order to the trade server.
     "price": float,       # Order price
     "sl": float,          # Stop loss (optional)
     "tp": float,          # Take profit (optional)
+    "order": int,         # Pending order ticket for modify/remove operations (optional)
+    "position": int,      # Position ticket for close/SLTP operations (optional)
+    "position_by": int,   # Opposite position ticket for CLOSE_BY operations (optional)
     "deviation": int,     # Max price deviation in points (optional)
     "magic": int,         # Magic number (optional)
     "comment": str,       # Order comment (optional)
@@ -289,6 +292,29 @@ Get an open position by its ticket number.
 
 **Returns:**
 - `Position` or `None`: Position information
+
+---
+
+### `close_position(ticket: int, deviation: int = 20, magic: Optional[int] = None, comment: str = "Close position", type_filling: Optional[int] = None) -> OrderResult`
+
+Close an open position by ticket.
+
+This helper is intended for hedging accounts where sending an opposite market order without the original position ticket can open a new position instead of closing the existing one. It reads the position, uses the current bid/ask, builds the opposite market order, and sends it with `position` set to the original ticket.
+
+**Parameters:**
+- `ticket` (int): Open position ticket to close
+- `deviation` (int, optional): Max price deviation in points
+- `magic` (int, optional): Magic number
+- `comment` (str, optional): Order comment, max 31 characters
+- `type_filling` (int, optional): Order filling type. If omitted, the server auto-detects a supported mode for the symbol.
+
+**Returns:**
+- `OrderResult`: Close order execution result
+
+**Example:**
+```python
+result = close_position(ticket=123456789, deviation=20)
+```
 
 ---
 
