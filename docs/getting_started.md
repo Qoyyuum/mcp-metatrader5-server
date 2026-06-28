@@ -73,10 +73,10 @@ The server provides helpful resources:
 
 When using with Claude Desktop or other MCP clients, you can ask the AI assistant:
 
-> "Initialize MT5 at path C:\Program Files\MetaTrader 5\terminal64.exe, then login with account 123456, password 'your_password', and server 'your_server'. After that, get the available symbols and show me recent price data for EURUSD on the 15-minute timeframe."
+> "Initialize MT5 with the default auto-detected terminal, then login with account 123456, password 'your_password', and server 'your_server'. After that, get the available symbols and show me recent price data for EURUSD on the 15-minute timeframe."
 
 The AI will use these tools:
-1. `initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")`
+1. `initialize(path="")`
 2. `login(login=123456, password="your_password", server="your_server")`
 3. `get_symbols()`
 4. `copy_rates_from_pos(symbol="EURUSD", timeframe=15, start_pos=0, count=100)`
@@ -113,4 +113,3 @@ The AI will:
 ## Disclaimer
 
 This software/model context protocol/author is not liable for any financial losses resulting from the use of the tools provided. Use at your own risk.
-

@@ -9,14 +9,16 @@ Complete reference for all tools, resources, and models provided by the MetaTrad
 Initialize the MetaTrader 5 terminal.
 
 **Parameters:**
-- `path` (str): Full path to the MT5 terminal executable
+- `path` (str): MT5 terminal path. Use `""` first to let MetaTrader5 auto-detect
+  or attach to the installed/running terminal. Pass a full `terminal64.exe` path
+  only if auto-detection fails.
 
 **Returns:**
 - `bool`: True if initialization was successful, False otherwise
 
 **Example:**
 ```python
-initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+initialize(path="")
 ```
 
 ---

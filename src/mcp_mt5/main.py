@@ -20,18 +20,20 @@ mcp = FastMCP(
     with a 'No IPC connection' error.
 
     Typical usage sequence:
-    1. initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+    1. initialize(path="")
        - Must be called first, every time the server starts
-       - Use the actual path to the MT5 terminal executable on the user's machine
+       - Use an empty string first. This lets MetaTrader5 auto-detect or attach
+         to the installed/running terminal and is the preferred default.
+       - Only pass an explicit terminal64.exe path if auto-detection fails.
     2. login(login=..., password=..., server=...) [optional]
        - Only needed if the terminal is not already logged in
     3. Now you can call any other tools: get_account_info(), order_send(), etc.
 
-    Common MT5 terminal paths:
+    Fallback MT5 terminal paths:
     - "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
     - "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
 
-    If initialize() fails or you are unsure of the path, ask the user:
+    If initialize(path="") fails, ask the user:
     "Where is your MetaTrader 5 terminal installed? Please provide the full path
     to terminal64.exe (e.g. C:\\Program Files\\MetaTrader 5\\terminal64.exe)"
 
@@ -592,7 +594,7 @@ def get_timeframe_constant(timeframe: int) -> int:
 
 # Initialize MetaTrader 5 connection
 @mcp.tool()
-def initialize(path: str) -> bool:
+def initialize(path: str = "") -> bool:
     """
     Initialize the MetaTrader 5 terminal.
 
@@ -600,8 +602,10 @@ def initialize(path: str) -> bool:
     Establishes connection to the MT5 terminal application.
 
     Args:
-        path: Full path to the MT5 terminal executable.
-              Common paths:
+        path: MT5 terminal path. Pass an empty string first to let MetaTrader5
+              auto-detect or attach to the installed/running terminal. Only use
+              an explicit terminal64.exe path if auto-detection fails.
+              Fallback paths:
               - "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
               - "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
 
@@ -610,7 +614,7 @@ def initialize(path: str) -> bool:
 
     Example:
         # Initialize MT5 connection first
-        initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+        initialize(path="")
         # Now you can use other tools like get_account_info(), symbol_select(), etc.
     """
     if not mt5.initialize(path=path):
@@ -654,7 +658,7 @@ def login(login: int, password: str, server: str) -> bool:
 
     Example:
         # First initialize MT5
-        initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+        initialize(path="")
         # Then login to your account
         login(login=12345678, password="yourpassword", server="Demo-Server")
         # Now you can use get_account_info(), place trades, etc.

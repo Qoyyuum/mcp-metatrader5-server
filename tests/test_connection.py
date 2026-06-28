@@ -18,12 +18,21 @@ class TestConnectionManagement:
         mock_mt5.initialize.return_value = True
 
         async with Client(mcp) as client:
-            result = await client.call_tool(
-                "initialize", {"path": "C:\\Program Files\\MetaTrader 5\\terminal64.exe"}
-            )
+            result = await client.call_tool("initialize", {"path": ""})
 
         assert result.data is True
-        mock_mt5.initialize.assert_called_once()
+        mock_mt5.initialize.assert_called_once_with(path="")
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_initialize_default_path(self, mock_mt5):
+        """Test initialize defaults to MT5 auto-detection."""
+        mock_mt5.initialize.return_value = True
+
+        async with Client(mcp) as client:
+            result = await client.call_tool("initialize", {})
+
+        assert result.data is True
+        mock_mt5.initialize.assert_called_once_with(path="")
 
     @patch("mcp_mt5.main.mt5")
     async def test_initialize_failure(self, mock_mt5):
@@ -114,6 +123,7 @@ class TestConnectionParameters:
         mock_mt5.initialize.return_value = True
 
         paths = [
+            "",
             "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
             "C:/Program Files/MetaTrader 5/terminal64.exe",
             "D:\\MT5\\terminal64.exe",
