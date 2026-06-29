@@ -20,18 +20,20 @@ mcp = FastMCP(
     with a 'No IPC connection' error.
 
     Typical usage sequence:
-    1. initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+    1. initialize(path="")
        - Must be called first, every time the server starts
-       - Use the actual path to the MT5 terminal executable on the user's machine
+       - Use an empty string first. This lets MetaTrader5 auto-detect or attach
+         to the installed/running terminal and is the preferred default.
+       - Only pass an explicit terminal64.exe path if auto-detection fails.
     2. login(login=..., password=..., server=...) [optional]
        - Only needed if the terminal is not already logged in
     3. Now you can call any other tools: get_account_info(), order_send(), etc.
 
-    Common MT5 terminal paths:
+    Fallback MT5 terminal paths:
     - "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
     - "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
 
-    If initialize() fails or you are unsure of the path, ask the user:
+    If initialize(path="") fails, ask the user:
     "Where is your MetaTrader 5 terminal installed? Please provide the full path
     to terminal64.exe (e.g. C:\\Program Files\\MetaTrader 5\\terminal64.exe)"
 
@@ -431,6 +433,88 @@ def _ensure_type_filling(request_dict: dict[str, Any]) -> None:
     logger.info(f"Auto-selected filling mode {filling_mode} for {symbol}")
 
 
+def _send_order_request(request_dict: dict[str, Any]) -> OrderResult:
+    """
+    Send a normalized MT5 order request and convert the response.
+
+    Args:
+        request_dict: MT5 order request without None values.
+
+    Returns:
+        OrderResult: Order execution result with request details.
+    """
+    _ensure_type_filling(request_dict)
+
+    result = mt5.order_send(request_dict)
+    if result is None:
+        error_code, error_msg = mt5.last_error()
+        logger.error(f"Failed to send order, error: {error_code} - {error_msg}")
+        raise ValueError(
+            f"Failed to send order. MT5 Error {error_code}: {error_msg}\n"
+            f"Request: {request_dict}\n"
+            f"Common causes:\n"
+            f"- MT5 not initialized: Call initialize() first\n"
+            f"- Invalid symbol: Check symbol name and ensure it's selected\n"
+            f"- Invalid price: Ensure price is current (use get_symbol_info_tick)\n"
+            f"- Insufficient margin: Check account balance\n"
+            f"- Market closed: Check if trading is allowed\n"
+            f"- Auto-trading disabled: Enable in MT5 terminal\n"
+            f"- Invalid volume: Check min/max/step volume for the symbol"
+        )
+
+    result_dict = result._asdict()
+
+    success_retcodes = {
+        mt5.TRADE_RETCODE_DONE,  # 10009 - Order placed successfully (market order)
+        mt5.TRADE_RETCODE_PLACED,  # 10008 - Order placed (pending order)
+        mt5.TRADE_RETCODE_DONE_PARTIAL,  # 10010 - Partial fill (rest canceled)
+    }
+
+    retcode = result_dict.get("retcode")
+    if retcode not in success_retcodes:
+        comment = result_dict.get("comment", "Unknown error")
+        logger.error(f"Order execution failed with retcode {retcode}: {comment}")
+
+        retcode_messages = {
+            mt5.TRADE_RETCODE_REQUOTE: "TRADE_RETCODE_REQUOTE - Requote. Price changed, retry with new price",
+            mt5.TRADE_RETCODE_REJECT: "TRADE_RETCODE_REJECT - Request rejected by broker",
+            mt5.TRADE_RETCODE_CANCEL: "TRADE_RETCODE_CANCEL - Request canceled by trader",
+            mt5.TRADE_RETCODE_ERROR: "TRADE_RETCODE_ERROR - Request processing error",
+            mt5.TRADE_RETCODE_TIMEOUT: "TRADE_RETCODE_TIMEOUT - Request timeout",
+            mt5.TRADE_RETCODE_INVALID: "TRADE_RETCODE_INVALID - Invalid request",
+            mt5.TRADE_RETCODE_INVALID_VOLUME: "TRADE_RETCODE_INVALID_VOLUME - Invalid volume",
+            mt5.TRADE_RETCODE_INVALID_PRICE: "TRADE_RETCODE_INVALID_PRICE - Invalid price",
+            mt5.TRADE_RETCODE_INVALID_STOPS: "TRADE_RETCODE_INVALID_STOPS - Invalid stops (SL/TP)",
+            mt5.TRADE_RETCODE_TRADE_DISABLED: "TRADE_RETCODE_TRADE_DISABLED - Trading disabled",
+            mt5.TRADE_RETCODE_MARKET_CLOSED: "TRADE_RETCODE_MARKET_CLOSED - Market is closed",
+            mt5.TRADE_RETCODE_NO_MONEY: "TRADE_RETCODE_NO_MONEY - Not enough money",
+            mt5.TRADE_RETCODE_PRICE_CHANGED: "TRADE_RETCODE_PRICE_CHANGED - Price changed, retry",
+            mt5.TRADE_RETCODE_PRICE_OFF: "TRADE_RETCODE_PRICE_OFF - No prices (broker not providing quotes)",
+            mt5.TRADE_RETCODE_INVALID_EXPIRATION: "TRADE_RETCODE_INVALID_EXPIRATION - Invalid order expiration",
+            mt5.TRADE_RETCODE_ORDER_CHANGED: "TRADE_RETCODE_ORDER_CHANGED - Order state changed",
+            mt5.TRADE_RETCODE_TOO_MANY_REQUESTS: "TRADE_RETCODE_TOO_MANY_REQUESTS - Too many requests",
+            mt5.TRADE_RETCODE_NO_CHANGES: "TRADE_RETCODE_NO_CHANGES - No changes in request",
+            mt5.TRADE_RETCODE_SERVER_DISABLES_AT: "TRADE_RETCODE_SERVER_DISABLES_AT - Autotrading disabled by server",
+            mt5.TRADE_RETCODE_CLIENT_DISABLES_AT: "TRADE_RETCODE_CLIENT_DISABLES_AT - Autotrading disabled by client",
+            mt5.TRADE_RETCODE_LOCKED: "TRADE_RETCODE_LOCKED - Request locked for processing",
+            mt5.TRADE_RETCODE_FROZEN: "TRADE_RETCODE_FROZEN - Order/position frozen",
+            mt5.TRADE_RETCODE_INVALID_FILL: "TRADE_RETCODE_INVALID_FILL - Invalid filling type",
+        }
+
+        detailed_msg = retcode_messages.get(retcode, f"Unknown retcode {retcode}")
+        raise ValueError(
+            f"Order execution failed: {detailed_msg}\n"
+            f"Comment from broker: {comment}\n"
+            f"Request: {request_dict}\n"
+            f"Result: {result_dict}"
+        )
+
+    if hasattr(result_dict["request"], "_asdict"):
+        result_dict["request"] = result_dict["request"]._asdict()
+
+    return OrderResult(**result_dict)
+
+
 def _format_timestamps_to_iso8601_utc(df: pd.DataFrame) -> None:
     """
     Convert timestamp columns in a DataFrame to ISO 8601 UTC format strings.
@@ -510,7 +594,7 @@ def get_timeframe_constant(timeframe: int) -> int:
 
 # Initialize MetaTrader 5 connection
 @mcp.tool()
-def initialize(path: str) -> bool:
+def initialize(path: str = "") -> bool:
     """
     Initialize the MetaTrader 5 terminal.
 
@@ -518,8 +602,10 @@ def initialize(path: str) -> bool:
     Establishes connection to the MT5 terminal application.
 
     Args:
-        path: Full path to the MT5 terminal executable.
-              Common paths:
+        path: MT5 terminal path. Pass an empty string first to let MetaTrader5
+              auto-detect or attach to the installed/running terminal. Only use
+              an explicit terminal64.exe path if auto-detection fails.
+              Fallback paths:
               - "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
               - "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
 
@@ -528,7 +614,7 @@ def initialize(path: str) -> bool:
 
     Example:
         # Initialize MT5 connection first
-        initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+        initialize(path="")
         # Now you can use other tools like get_account_info(), symbol_select(), etc.
     """
     if not mt5.initialize(path=path):
@@ -572,7 +658,7 @@ def login(login: int, password: str, server: str) -> bool:
 
     Example:
         # First initialize MT5
-        initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+        initialize(path="")
         # Then login to your account
         login(login=12345678, password="yourpassword", server="Demo-Server")
         # Now you can use get_account_info(), place trades, etc.
@@ -1111,6 +1197,9 @@ def order_send(request: OrderRequest) -> OrderResult:
             OPTIONAL (omit if not needed, don't set to None or 0):
             - sl (float): Stop loss price
             - tp (float): Take profit price
+            - order (int): Pending order ticket for modify/remove operations
+            - position (int): Position ticket for closing or modifying a position
+            - position_by (int): Opposite position ticket for close-by operations
             - deviation (int): Max price deviation in points
             - magic (int): EA identifier
             - comment (str): Max 31 characters
@@ -1160,83 +1249,7 @@ def order_send(request: OrderRequest) -> OrderResult:
     # MT5 doesn't accept None for optional parameters - they must be omitted entirely
     request_dict = request.model_dump(exclude_none=True)
 
-    # Auto-detect filling mode if not provided
-    _ensure_type_filling(request_dict)
-
-    # Send order
-    result = mt5.order_send(request_dict)
-    if result is None:
-        error_code, error_msg = mt5.last_error()
-        logger.error(f"Failed to send order, error: {error_code} - {error_msg}")
-        raise ValueError(
-            f"Failed to send order. MT5 Error {error_code}: {error_msg}\n"
-            f"Request: {request_dict}\n"
-            f"Common causes:\n"
-            f"- MT5 not initialized: Call initialize() first\n"
-            f"- Invalid symbol: Check symbol name and ensure it's selected\n"
-            f"- Invalid price: Ensure price is current (use get_symbol_info_tick)\n"
-            f"- Insufficient margin: Check account balance\n"
-            f"- Market closed: Check if trading is allowed\n"
-            f"- Auto-trading disabled: Enable in MT5 terminal\n"
-            f"- Invalid volume: Check min/max/step volume for the symbol"
-        )
-
-    # Convert named tuple to dictionary
-    result_dict = result._asdict()
-
-    # Define MT5 success retcodes - these are NOT errors
-    success_retcodes = {
-        mt5.TRADE_RETCODE_DONE,  # 10009 - Order placed successfully (market order)
-        mt5.TRADE_RETCODE_PLACED,  # 10008 - Order placed (pending order)
-        mt5.TRADE_RETCODE_DONE_PARTIAL,  # 10010 - Partial fill (rest canceled)
-    }
-
-    # Check if order execution failed (retcode not in success set)
-    retcode = result_dict.get("retcode")
-    if retcode not in success_retcodes:
-        comment = result_dict.get("comment", "Unknown error")
-        logger.error(f"Order execution failed with retcode {retcode}: {comment}")
-
-        # Map common error retcodes to helpful messages
-        retcode_messages = {
-            mt5.TRADE_RETCODE_REQUOTE: "TRADE_RETCODE_REQUOTE - Requote. Price changed, retry with new price",
-            mt5.TRADE_RETCODE_REJECT: "TRADE_RETCODE_REJECT - Request rejected by broker",
-            mt5.TRADE_RETCODE_CANCEL: "TRADE_RETCODE_CANCEL - Request canceled by trader",
-            mt5.TRADE_RETCODE_ERROR: "TRADE_RETCODE_ERROR - Request processing error",
-            mt5.TRADE_RETCODE_TIMEOUT: "TRADE_RETCODE_TIMEOUT - Request timeout",
-            mt5.TRADE_RETCODE_INVALID: "TRADE_RETCODE_INVALID - Invalid request",
-            mt5.TRADE_RETCODE_INVALID_VOLUME: "TRADE_RETCODE_INVALID_VOLUME - Invalid volume",
-            mt5.TRADE_RETCODE_INVALID_PRICE: "TRADE_RETCODE_INVALID_PRICE - Invalid price",
-            mt5.TRADE_RETCODE_INVALID_STOPS: "TRADE_RETCODE_INVALID_STOPS - Invalid stops (SL/TP)",
-            mt5.TRADE_RETCODE_TRADE_DISABLED: "TRADE_RETCODE_TRADE_DISABLED - Trading disabled",
-            mt5.TRADE_RETCODE_MARKET_CLOSED: "TRADE_RETCODE_MARKET_CLOSED - Market is closed",
-            mt5.TRADE_RETCODE_NO_MONEY: "TRADE_RETCODE_NO_MONEY - Not enough money",
-            mt5.TRADE_RETCODE_PRICE_CHANGED: "TRADE_RETCODE_PRICE_CHANGED - Price changed, retry",
-            mt5.TRADE_RETCODE_PRICE_OFF: "TRADE_RETCODE_PRICE_OFF - No prices (broker not providing quotes)",
-            mt5.TRADE_RETCODE_INVALID_EXPIRATION: "TRADE_RETCODE_INVALID_EXPIRATION - Invalid order expiration",
-            mt5.TRADE_RETCODE_ORDER_CHANGED: "TRADE_RETCODE_ORDER_CHANGED - Order state changed",
-            mt5.TRADE_RETCODE_TOO_MANY_REQUESTS: "TRADE_RETCODE_TOO_MANY_REQUESTS - Too many requests",
-            mt5.TRADE_RETCODE_NO_CHANGES: "TRADE_RETCODE_NO_CHANGES - No changes in request",
-            mt5.TRADE_RETCODE_SERVER_DISABLES_AT: "TRADE_RETCODE_SERVER_DISABLES_AT - Autotrading disabled by server",
-            mt5.TRADE_RETCODE_CLIENT_DISABLES_AT: "TRADE_RETCODE_CLIENT_DISABLES_AT - Autotrading disabled by client",
-            mt5.TRADE_RETCODE_LOCKED: "TRADE_RETCODE_LOCKED - Request locked for processing",
-            mt5.TRADE_RETCODE_FROZEN: "TRADE_RETCODE_FROZEN - Order/position frozen",
-            mt5.TRADE_RETCODE_INVALID_FILL: "TRADE_RETCODE_INVALID_FILL - Invalid filling type",
-        }
-
-        detailed_msg = retcode_messages.get(retcode, f"Unknown retcode {retcode}")
-        raise ValueError(
-            f"Order execution failed: {detailed_msg}\n"
-            f"Comment from broker: {comment}\n"
-            f"Request: {request_dict}\n"
-            f"Result: {result_dict}"
-        )
-
-    # Convert request named tuple to dictionary if needed
-    if hasattr(result_dict["request"], "_asdict"):
-        result_dict["request"] = result_dict["request"]._asdict()
-
-    return OrderResult(**result_dict)
+    return _send_order_request(request_dict)
 
 
 # Check order
@@ -1361,6 +1374,80 @@ def positions_get_by_ticket(ticket: int) -> Position | None:
     # Convert named tuple to dictionary
     position_dict = position[0]._asdict()
     return Position(**position_dict)
+
+
+# Close position by ticket
+@mcp.tool()
+def close_position(
+    ticket: int,
+    deviation: int = 20,
+    magic: int | None = None,
+    comment: str = "Close position",
+    type_filling: int | None = None,
+) -> OrderResult:
+    """
+    Close an open position by its ticket.
+
+    This is a dedicated helper for hedging accounts where simply sending an
+    opposite market order can open a new position unless the MT5 request includes
+    the original position ticket.
+
+    Args:
+        ticket: Open position ticket to close.
+        deviation: Maximum price deviation in points.
+        magic: Expert Advisor ID (optional).
+        comment: Order comment (max 31 characters).
+        type_filling: Order filling type as INTEGER (optional). If omitted, the
+            server auto-detects a supported filling mode for the symbol.
+
+    Returns:
+        OrderResult: Close order execution result.
+    """
+    if len(comment) > 31:
+        raise ValueError("comment must be <= 31 characters")
+
+    position = positions_get_by_ticket(ticket)
+    if position is None:
+        raise ValueError(f"Position with ticket {ticket} was not found")
+
+    tick = mt5.symbol_info_tick(position.symbol)
+    if tick is None:
+        error_code, error_msg = mt5.last_error()
+        logger.error(
+            f"Failed to get tick for closing position {ticket}, error: {error_code} - {error_msg}"
+        )
+        raise ValueError(
+            f"Failed to get tick for symbol {position.symbol}. "
+            f"Error: {error_code} - {error_msg}. "
+            f"Ensure the symbol is selected and tradeable."
+        )
+
+    if position.type == mt5.ORDER_TYPE_BUY:
+        close_type = mt5.ORDER_TYPE_SELL
+        price = tick.bid
+    elif position.type == mt5.ORDER_TYPE_SELL:
+        close_type = mt5.ORDER_TYPE_BUY
+        price = tick.ask
+    else:
+        raise ValueError(f"Unsupported position type for ticket {ticket}: {position.type}")
+
+    request_dict: dict[str, Any] = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": position.symbol,
+        "volume": position.volume,
+        "type": close_type,
+        "price": price,
+        "position": position.ticket,
+        "deviation": deviation,
+        "comment": comment,
+    }
+
+    if magic is not None:
+        request_dict["magic"] = magic
+    if type_filling is not None:
+        request_dict["type_filling"] = type_filling
+
+    return _send_order_request(request_dict)
 
 
 # Get orders

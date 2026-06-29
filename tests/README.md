@@ -120,7 +120,7 @@ import pytest
 def test_mt5_connection():
     """Test actual MT5 connection."""
     # This test requires MT5 to be running
-    result = initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+    result = initialize(path="")
     assert result is True
 ```
 

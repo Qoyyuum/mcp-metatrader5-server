@@ -111,7 +111,7 @@ async def use_mt5_with_pydantic_ai():
             # Call a tool - Initialize MT5
             init_result = await session.call_tool(
                 "initialize",
-                arguments={"path": r"C:\Program Files\MetaTrader 5\terminal64.exe"}
+                arguments={"path": ""}
             )
             print(f"MT5 Initialization: {init_result.content}")
             
@@ -455,7 +455,7 @@ class TradingBot:
 async def main():
     bot = TradingBot(
         api_key="your-anthropic-api-key",
-        mt5_path=r"C:\Program Files\MetaTrader 5\terminal64.exe"
+        mt5_path=""
     )
     
     await bot.run(
@@ -621,11 +621,13 @@ uvx --from mcp-metatrader5-server mt5mcp --help
 
 ### Issue: MT5 Connection Failed
 
-**Solution**: Ensure MT5 terminal is installed and path is correct:
+**Solution**: Try the default auto-detected terminal first. If that fails, ensure
+MT5 terminal is installed and pass the full path to `terminal64.exe`:
 
 ```python
-# Try different common paths
+# Try auto-detection first, then fallback paths
 paths = [
+    "",
     r"C:\Program Files\MetaTrader 5\terminal64.exe",
     r"C:\Program Files (x86)\MetaTrader 5\terminal64.exe",
 ]

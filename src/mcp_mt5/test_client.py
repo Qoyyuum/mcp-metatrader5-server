@@ -16,8 +16,8 @@ dotenv.load_dotenv()
 # Configure the MCP server URL
 MCP_SERVER_URL = "http://localhost:8000/mcp"
 
-# MT5 Configuration - Update these with your details
-MT5_PATH = os.getenv("MT5_PATH") or r"C:\Program Files\MetaTrader 5\terminal64.exe"
+# MT5 Configuration - Update these with your details if auto-detection fails
+MT5_PATH = os.getenv("MT5_PATH") or ""
 MT5_LOGIN = int(os.getenv("MT5_LOGIN") or 123456)  # Your MT5 account number
 MT5_PASSWORD = os.getenv("MT5_PASSWORD") or "your_password"  # Your MT5 password
 MT5_SERVER = os.getenv("MT5_SERVER") or "YourBroker-Demo"  # Your broker server name
@@ -31,7 +31,7 @@ async def example_1_connection():
 
     async with Client(MCP_SERVER_URL) as client:
         # Initialize MT5
-        print(f"Initializing MT5 at: {MT5_PATH}")
+        print(f"Initializing MT5 at: {MT5_PATH or '<auto-detect>'}")
         result = await client.call_tool("initialize", {"path": MT5_PATH})
 
         # Check if initialization succeeded
@@ -188,7 +188,8 @@ async def main():
     print("MCP MetaTrader 5 Server - Test Client")
     print("=" * 60)
     print("\n⚠️  Before running:")
-    print("1. Update MT5_PATH, MT5_LOGIN, MT5_PASSWORD, MT5_SERVER in this file")
+    print("1. Update MT5_LOGIN, MT5_PASSWORD, MT5_SERVER in this file")
+    print("   Set MT5_PATH only if auto-detection fails")
     print("2. Start the MCP server with HTTP mode: uv run mt5mcp")
     print("3. Make sure MT5 terminal is running")
 

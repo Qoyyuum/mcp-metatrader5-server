@@ -112,6 +112,21 @@ class TestOrderRequestModel:
         assert order.magic is None
         assert order.comment is None
 
+    def test_close_position_order_preserves_position_ticket(self):
+        """Test close-position deal payload keeps the target position ticket."""
+        order = OrderRequest(
+            action=1,
+            symbol="EURUSD",
+            volume=0.1,
+            type=1,
+            price=1.1,
+            position=123456789,
+            deviation=20,
+        )
+
+        assert order.position == 123456789
+        assert order.model_dump(exclude_none=True)["position"] == 123456789
+
     def test_modify_pending_order_requires_order_and_price_only(self):
         """Test modify pending payload does not require create-only fields."""
         order = OrderRequest(
