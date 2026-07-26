@@ -42,6 +42,84 @@ uv run mt5mcp
 - **MetaTrader 5 terminal** installed on Windows
 - **MetaTrader 5 account** (demo or real)
 
+> The MetaTrader 5 terminal requirement applies to the default (local) backend
+> only. See **Hosted mode** below to run on Linux/macOS/containers with no local
+> terminal.
+
+## Hosted mode - run on any OS, no local terminal (optional)
+
+The default backend drives a local MetaTrader 5 terminal via the official
+`MetaTrader5` package, which is **Windows-only**. As an **opt-in alternative**,
+setting `TICKERALL_API_KEY` runs the **exact same MCP tools** against the
+[TickerAll](https://tickerall.com) hosted MT5 API instead - so the server runs
+on **Linux, macOS, or in a container, with no MetaTrader 5 terminal installed**.
+
+This is fully additive: when `TICKERALL_API_KEY` is unset, nothing changes and
+the local terminal is used exactly as before.
+
+**Setup:**
+
+1. Get an API key at [tickerall.com](https://tickerall.com).
+2. Install with the hosted extra:
+
+   ```bash
+   pip install "mcp-metatrader5-server[tickerall]"
+   # or:  uv sync --extra tickerall
+   ```
+
+3. Configure your MCP client - the API key is the only thing required:
+
+   ```json
+   {
+     "mcpServers": {
+       "mcp-metatrader5-server": {
+         "command": "uvx",
+         "args": ["--from", "mcp-metatrader5-server[tickerall]", "mt5mcp"],
+         "env": {
+           "TICKERALL_API_KEY": "cf_api_your_key_here"
+         }
+       }
+     }
+   }
+   ```
+
+Then connect your broker account **through the server itself**: call the
+`login(account, password, server)` tool (or the `connect_to_mt5` prompt) and the
+server connects and warms the account for you. There's no separate dashboard
+step and no account id to look up - the account is resolved from your API key.
+After that, every tool works as usual.
+
+Accounts you log in with are **remembered**, so the server reconnects them
+automatically on later sessions without asking for the password again.
+Credentials are stored **client-side only** (TickerAll is stateless and never
+persists them), encrypted at rest with a key bound to your machine and readable
+only by your user; set `TICKERALL_REMEMBER_ACCOUNTS=0` to disable.
+
+**Multiple accounts.** If several accounts are connected to your key, the AI
+manages them for you:
+
+- **`list_accounts()`** - see every connected account (`account_id`, `server`,
+  masked number, `is_demo`, `hot`, and which is `active`).
+- **`use_account(account_id)`** - switch the active account to an
+  already-connected one (no password needed); every tool afterwards acts on it.
+- **`login(account, password, server)`** - connect a brand-new account and make
+  it active.
+
+A typical multi-account session: the AI calls `list_accounts()`, asks which one
+you want, then `use_account(...)`. You switch accounts between requests - one is
+active at a time, like a real terminal.
+
+> `TICKERALL_ACCOUNT_ID` is an optional default: set it to auto-select a specific
+> account when you have several, instead of calling `use_account()` each session.
+
+**Notes / current limitations of the hosted backend:**
+
+- OHLC (`copy_rates_*`) covers timeframes M1, M5, M15, M30, H1, H4, D1, W1, MN1.
+- Real-time ticks come from `get_symbol_info_tick`; historical raw ticks
+  (`copy_ticks_*`) are not *yet* served by the hosted API - use `copy_rates_*`.
+- `order_check` (broker dry-run) is not pre-validated; the broker validates on
+  `order_send`.
+
 ## Usage
 
 ### Quick Start

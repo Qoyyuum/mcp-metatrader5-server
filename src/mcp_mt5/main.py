@@ -2,10 +2,15 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import MetaTrader5 as mt5
 import pandas as pd
 from fastmcp import FastMCP
 from pydantic import BaseModel, field_validator, model_validator
+
+from .backend import get_backend, use_tickerall
+
+# Local MetaTrader5 terminal by default, or the TickerAll hosted API when
+# TICKERALL_API_KEY is set (see backend.py).
+mt5 = get_backend()
 
 logger = logging.getLogger(__name__)
 
@@ -1627,3 +1632,32 @@ def get_trade_actions() -> str:
         result += f"{name}: {value}\n"
 
     return result
+
+
+# Hosted-backend-only tools: browse and switch between the broker accounts
+# connected to a TickerAll API key. The local MetaTrader5 terminal is logged
+# into a single account, so these are only registered in hosted mode.
+if use_tickerall():
+
+    @mcp.tool()
+    def list_accounts() -> list[dict[str, Any]]:
+        """List the broker accounts connected to your TickerAll API key.
+
+        Use this first when the user has not said which account to use. Returns
+        one entry per account: account_id, server, number (masked), is_demo,
+        connected, hot, and active (whether it is the current one). If more than
+        one is returned, ask the user which account, then call
+        use_account(account_id). (Hosted TickerAll backend only.)
+        """
+        return mt5.list_accounts()
+
+    @mcp.tool()
+    def use_account(account_id: str) -> dict[str, Any]:
+        """Switch the active broker account to an already-connected one.
+
+        Pass an account_id from list_accounts(). No password is needed for an
+        account already connected to your API key; it is re-warmed automatically
+        if it had gone cold. To connect a brand-new account instead, use login().
+        (Hosted TickerAll backend only.)
+        """
+        return mt5.use_account(account_id)

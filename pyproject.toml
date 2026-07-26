@@ -20,7 +20,11 @@ classifiers = [
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
-    "metatrader5==5.0.5735",
+    # The official MetaTrader5 package is only distributed for Windows, so it
+    # can only be installed there. This platform marker lets the rest of the
+    # package install on Linux/macOS too (needed for the hosted TickerAll
+    # backend, see README "Hosted mode"); on Windows nothing changes.
+    "metatrader5==5.0.5735; platform_system == 'Windows'",
     "fastmcp==3.4.4",
     "pandas>=2.3.3",
     "pydantic>=2.11.9",
@@ -33,6 +37,14 @@ docs = [
     "mkdocs-material>=9.5.0",
     "pymdown-extensions>=10.7",
     "mkdocs-autorefs>=0.5.0",
+]
+# Hosted backend: run the same MCP tools on any OS with no local MT5 terminal,
+# via the TickerAll hosted MT5 API. Enabled by setting TICKERALL_API_KEY.
+#   pip install mcp-metatrader5-server[tickerall]
+tickerall = [
+    "tickerall>=0.1.16",
+    # Encrypts remembered account credentials at rest (client-side).
+    "cryptography>=42",
 ]
 
 [project.urls]
