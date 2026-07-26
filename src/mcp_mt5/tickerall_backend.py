@@ -233,6 +233,28 @@ def _iso_to_epoch(value: Any) -> int:
         return 0
 
 
+def _group_match(symbol: str, group: str) -> bool:
+    """Match a symbol against an MT5 'group' filter.
+
+    Mirrors MetaTrader 5 group semantics: comma-separated patterns, '*'
+    wildcards, and a leading '!' to exclude. When only negations are given,
+    everything not excluded is included.
+    """
+    from fnmatch import fnmatch
+
+    sym = symbol.upper()
+    tokens = [t.strip() for t in group.split(",") if t.strip()]
+    if not tokens:
+        return True
+    included = not any(not t.startswith("!") for t in tokens)  # no positive -> default include
+    for tok in tokens:
+        negate = tok.startswith("!")
+        pattern = (tok[1:] if negate else tok).upper()
+        if fnmatch(sym, pattern):
+            included = not negate
+    return included
+
+
 class _Provider:
     """Holds the TickerAll client + resolved account and maps MT5 calls to it."""
 
@@ -880,7 +902,13 @@ class _Provider:
                 )
 
             if action == TRADE_ACTION_PENDING:
-                hosted_type = self._pending_type(order_type)
+                try:
+                    hosted_type = self._pending_type(order_type)
+                except ValueError as exc:
+                    # Stop-limit is unsupported: return a labelled failure rather
+                    # than a bare None, mirroring the close-by rejection below.
+                    self._fail(RES_E_UNSUPPORTED, str(exc))
+                    return self._order_fail(request, TRADE_RETCODE_INVALID, str(exc))
                 side = (
                     "SELL"
                     if order_type
@@ -1149,12 +1177,11 @@ class _Provider:
             account_id = self._resolve_account()
             kwargs = self._history_kwargs(request)
             orders = self._ensure_client().history.orders(account_id, **kwargs)
-            position = request.get("position")
-            out = []
-            for o in orders:
-                if position is not None and str(o.position_id) != str(position):
-                    continue
-                out.append(self._history_order_struct(o))
+            out = [
+                self._history_order_struct(o)
+                for o in orders
+                if self._history_matches(o, request, "order_ticket")
+            ]
             self._ok()
             return out
         except Exception as exc:
@@ -1167,12 +1194,11 @@ class _Provider:
             account_id = self._resolve_account()
             kwargs = self._history_kwargs(request)
             deals = self._ensure_client().history.deals(account_id, **kwargs)
-            position = request.get("position")
-            out = []
-            for d in deals:
-                if position is not None and str(d.position_id) != str(position):
-                    continue
-                out.append(self._history_deal_struct(d))
+            out = [
+                self._history_deal_struct(d)
+                for d in deals
+                if self._history_matches(d, request, "ticket")
+            ]
             self._ok()
             return out
         except Exception as exc:
@@ -1190,6 +1216,24 @@ class _Provider:
         if request.get("to") is not None:
             kwargs["to"] = request["to"]
         return kwargs
+
+    @staticmethod
+    def _history_matches(rec: Any, request: dict[str, Any], ticket_attr: str) -> bool:
+        """Filter a history record by the MT5 'position'/'ticket'/'group' patterns.
+
+        The hosted history endpoint filters by symbol and time only, so these
+        finer MT5 filters are applied client-side rather than silently ignored.
+        """
+        position = request.get("position")
+        if position is not None and str(getattr(rec, "position_id", "")) != str(position):
+            return False
+        ticket = request.get("ticket")
+        if ticket is not None and str(getattr(rec, ticket_attr, "")) != str(ticket):
+            return False
+        group = request.get("group")
+        if group is not None:
+            return _group_match(str(getattr(rec, "symbol", "")), group)
+        return True
 
     @staticmethod
     def _history_order_struct(o: Any) -> _Struct:
