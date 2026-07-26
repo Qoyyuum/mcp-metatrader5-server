@@ -92,8 +92,9 @@ After that, every tool works as usual.
 Accounts you log in with are **remembered**, so the server reconnects them
 automatically on later sessions without asking for the password again.
 Credentials are stored **client-side only** (TickerAll is stateless and never
-persists them), encrypted at rest with a key bound to your machine and readable
-only by your user; set `TICKERALL_REMEMBER_ACCOUNTS=0` to disable.
+persists them), encrypted at rest with a key bound to your machine (and, on
+Unix, restricted to your user with `0600` permissions); set
+`TICKERALL_REMEMBER_ACCOUNTS=0` to disable.
 
 **Multiple accounts.** If several accounts are connected to your key, the AI
 manages them for you:

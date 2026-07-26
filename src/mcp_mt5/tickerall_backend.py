@@ -184,6 +184,24 @@ _CONST_TO_TF = {
     TIMEFRAME_MN1: "MN1",
 }
 
+# Minutes per hosted timeframe, used to size a date/range history fetch (the
+# hosted API is count-based, so we estimate how many recent bars reach the
+# requested start).
+_CONST_TO_MINUTES = {
+    TIMEFRAME_M1: 1,
+    TIMEFRAME_M5: 5,
+    TIMEFRAME_M15: 15,
+    TIMEFRAME_M30: 30,
+    TIMEFRAME_H1: 60,
+    TIMEFRAME_H4: 240,
+    TIMEFRAME_D1: 1440,
+    TIMEFRAME_W1: 10080,
+    TIMEFRAME_MN1: 43200,
+}
+# Upper bound on bars fetched for one date/range query; beyond this the request
+# is reported as deeper than the available history rather than silently partial.
+_MAX_RATES_FETCH = 20000
+
 
 class _Struct:
     """Mimics MetaTrader5's namedtuple returns: attribute access + ``_asdict()``."""
@@ -206,7 +224,11 @@ def _iso_to_epoch(value: Any) -> int:
         return int(value)
     try:
         text = str(value).replace("Z", "+00:00")
-        return int(datetime.fromisoformat(text).timestamp())
+        dt = datetime.fromisoformat(text)
+        # Broker timestamps are UTC; treat a naive one as UTC rather than local.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return int(dt.timestamp())
     except (ValueError, TypeError):
         return 0
 
@@ -457,11 +479,15 @@ class _Provider:
             os.makedirs(self._creds_dir(), exist_ok=True)
             with contextlib.suppress(OSError):
                 os.chmod(self._creds_dir(), 0o700)
+            # Create with 0600 AT OPEN TIME, so there is never a window where the
+            # file exists with default (looser) permissions. On Windows the mode
+            # is advisory; the encryption is the real protection there.
             path = self._creds_file()
-            with open(path, "wb") as f:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(path)
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "wb") as f:
                 f.write(blob)
-            with contextlib.suppress(OSError):
-                os.chmod(path, 0o600)
         except OSError as exc:
             logger.warning("Could not remember TickerAll account: %s", exc)
 
@@ -743,11 +769,16 @@ class _Provider:
     ) -> list[dict[str, Any]] | None:
         try:
             frm = self._to_epoch(date_from)
-            # Fetch a generous window, then keep bars at/after date_from.
-            bars = self._bars(symbol, timeframe, max(count * 2, count + 50))
-            bars = [b for b in bars if _iso_to_epoch(b.timestamp) >= frm][:count]
+            bars = self._bars(symbol, timeframe, self._span_count(timeframe, frm, None, count))
+            # If the oldest bar we could fetch is still newer than date_from, the
+            # available history is shallower than requested. Fail honestly rather
+            # than silently returning the most recent bars instead.
+            if bars and _iso_to_epoch(bars[0].timestamp) > frm:
+                self._fail(RES_E_NOT_FOUND, "requested history is deeper than available")
+                return None
+            window = [b for b in bars if _iso_to_epoch(b.timestamp) >= frm][:count]
             self._ok()
-            return [self._bar_row(b) for b in bars]
+            return [self._bar_row(b) for b in window]
         except Exception as exc:
             self._fail(RES_E_FAIL, str(exc))
             logger.error("TickerAll copy_rates_from_date failed: %s", exc)
@@ -758,14 +789,27 @@ class _Provider:
     ) -> list[dict[str, Any]] | None:
         try:
             frm, to = self._to_epoch(date_from), self._to_epoch(date_to)
-            bars = self._bars(symbol, timeframe, 5000)
-            bars = [b for b in bars if frm <= _iso_to_epoch(b.timestamp) <= to]
+            bars = self._bars(symbol, timeframe, self._span_count(timeframe, frm, to, None))
+            window = [b for b in bars if frm <= _iso_to_epoch(b.timestamp) <= to]
+            if not window:
+                # No bars in the range (or history didn't reach it): fail rather
+                # than report a silent successful empty result.
+                self._fail(RES_E_NOT_FOUND, "no bars available for the requested range")
+                return None
             self._ok()
-            return [self._bar_row(b) for b in bars]
+            return [self._bar_row(b) for b in window]
         except Exception as exc:
             self._fail(RES_E_FAIL, str(exc))
             logger.error("TickerAll copy_rates_range failed: %s", exc)
             return None
+
+    @staticmethod
+    def _span_count(timeframe_const: int, frm: int, to: int | None, count: int | None) -> int:
+        """Recent-bar count to fetch to (try to) reach `frm`, bounded by a cap."""
+        tf_min = _CONST_TO_MINUTES.get(timeframe_const, 1)
+        upper = to if to is not None else int(datetime.now(UTC).timestamp())
+        span = max(1, (upper - frm) // (tf_min * 60)) + (count or 0) + 8
+        return int(min(span, _MAX_RATES_FETCH))
 
     @staticmethod
     def _to_epoch(value: Any) -> int:

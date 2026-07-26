@@ -1,9 +1,13 @@
 """Unit tests for timeframe validation and conversion."""
 
-import MetaTrader5 as mt5
 import pytest
 
-from mcp_mt5.main import get_timeframe_constant, timeframe_map
+# MetaTrader5 ships Windows-only wheels; skip this module (which imports it, and
+# through it the local backend) when it isn't installed, e.g. on Linux/macOS.
+# CI runs the unit suite on Windows, where it is present.
+mt5 = pytest.importorskip("MetaTrader5")
+
+from mcp_mt5.main import get_timeframe_constant, timeframe_map  # noqa: E402
 
 
 @pytest.mark.unit
