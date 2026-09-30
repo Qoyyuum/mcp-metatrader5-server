@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -23,8 +24,13 @@ mcp = FastMCP(
     1. initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
        - Must be called first, every time the server starts
        - Use the actual path to the MT5 terminal executable on the user's machine
+       - If the MT5_PATH environment variable is set on the server, call
+         initialize() with no arguments
     2. login(login=..., password=..., server=...) [optional]
        - Only needed if the terminal is not already logged in
+       - If credentials are configured in the server environment (MT5_LOGIN,
+         MT5_PASSWORD, MT5_SERVER), call login() with no arguments. Do NOT ask
+         the user for their password in that case.
     3. Now you can call any other tools: get_account_info(), order_send(), etc.
 
     Common MT5 terminal paths:
@@ -39,6 +45,29 @@ mcp = FastMCP(
     Volume is always in LOTS (e.g. 0.01, 0.1, 1.0).
     """,
 )
+
+# Environment variables used as fallbacks for initialize() and login().
+# For each setting the first variable that is set wins.
+ENV_PATH = ("MT5_PATH",)
+ENV_LOGIN = ("MT5_USERNAME", "MT5_LOGIN")
+ENV_PASSWORD = ("MT5_PASSWORD",)
+ENV_SERVER = ("MT5_SERVER",)
+
+
+def _env(names: tuple[str, ...]) -> str | None:
+    """Return the value of the first non-empty environment variable in names."""
+    for name in names:
+        value = os.environ.get(name)
+        if value and value.strip():
+            return value
+    return None
+
+
+def _redact(text: str, secret: str | None) -> str:
+    """Remove a secret from a message before it is logged or returned."""
+    if secret:
+        return text.replace(secret, "***")
+    return text
 
 
 # Models for request/response data
@@ -510,7 +539,7 @@ def get_timeframe_constant(timeframe: int) -> int:
 
 # Initialize MetaTrader 5 connection
 @mcp.tool()
-def initialize(path: str) -> bool:
+def initialize(path: str | None = None) -> bool:
     """
     Initialize the MetaTrader 5 terminal.
 
@@ -518,7 +547,10 @@ def initialize(path: str) -> bool:
     Establishes connection to the MT5 terminal application.
 
     Args:
-        path: Full path to the MT5 terminal executable.
+        path: Full path to the MT5 terminal executable (optional).
+              If omitted, the MT5_PATH environment variable of the server is
+              used. If that is not set either, MetaTrader5 connects to the
+              terminal it finds on its own.
               Common paths:
               - "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
               - "C:\\Program Files (x86)\\MetaTrader 5\\terminal64.exe"
@@ -529,9 +561,13 @@ def initialize(path: str) -> bool:
     Example:
         # Initialize MT5 connection first
         initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
+        # Or, with MT5_PATH set in the server environment
+        initialize()
         # Now you can use other tools like get_account_info(), symbol_select(), etc.
     """
-    if not mt5.initialize(path=path):
+    path = path or _env(ENV_PATH)
+    ok = mt5.initialize(path=path) if path else mt5.initialize()
+    if not ok:
         logger.error(f"MT5 initialization failed, error code: {mt5.last_error()}")
         return False
 
@@ -555,17 +591,22 @@ def shutdown() -> bool:
 
 # Login to MetaTrader 5 account
 @mcp.tool()
-def login(login: int, password: str, server: str) -> bool:
+def login(login: int | None = None, password: str | None = None, server: str | None = None) -> bool:
     """
     Log in to the MetaTrader 5 trading account.
 
     Call this AFTER initialize() if you need to switch accounts or login programmatically.
     Not required if MT5 terminal is already logged in to an account.
 
+    Credentials are read from the server environment (MT5_LOGIN or MT5_USERNAME,
+    MT5_PASSWORD, MT5_SERVER) for any argument that is not passed. When they are
+    configured there, call login() with no arguments and do NOT ask the user for
+    their credentials.
+
     Args:
-        login: Trading account number (integer, e.g., 12345678)
-        password: Trading account password (string)
-        server: Trading server name (e.g., "Demo-Server", "YourBroker-Live")
+        login: Trading account number (integer, e.g., 12345678). Optional.
+        password: Trading account password (string). Optional.
+        server: Trading server name (e.g., "Demo-Server", "YourBroker-Live"). Optional.
 
     Returns:
         bool: True if login was successful, False otherwise.
@@ -573,12 +614,49 @@ def login(login: int, password: str, server: str) -> bool:
     Example:
         # First initialize MT5
         initialize(path="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
-        # Then login to your account
+        # Then login with the credentials from the server environment
+        login()
+        # Or pass them explicitly
         login(login=12345678, password="yourpassword", server="Demo-Server")
         # Now you can use get_account_info(), place trades, etc.
     """
-    if not mt5.login(login=login, password=password, server=server):
-        logger.error(f"MT5 login failed, error code: {mt5.last_error()}")
+    if login is None:
+        env_login = _env(ENV_LOGIN)
+        if env_login is not None:
+            try:
+                login = int(env_login)
+            except ValueError:
+                raise ValueError(
+                    "MT5_LOGIN / MT5_USERNAME must be the numeric trading account number"
+                )
+    if password is None:
+        password = _env(ENV_PASSWORD)
+    if server is None:
+        server = _env(ENV_SERVER)
+
+    missing = [
+        name
+        for name, value in (
+            ("login (MT5_LOGIN)", login),
+            ("password (MT5_PASSWORD)", password),
+            ("server (MT5_SERVER)", server),
+        )
+        if value is None
+    ]
+    if missing:
+        raise ValueError(
+            "Missing MT5 credentials: "
+            + ", ".join(missing)
+            + ". Pass them as arguments or set them in the MCP server environment."
+        )
+
+    try:
+        ok = mt5.login(login=login, password=password, server=server)
+    except Exception as e:
+        # "from None": the original exception may carry the password, and FastMCP logs chained tracebacks
+        raise RuntimeError(f"MT5 login raised an error: {_redact(str(e), password)}") from None
+    if not ok:
+        logger.error(f"MT5 login failed, error code: {_redact(str(mt5.last_error()), password)}")
         return False
 
     logger.info(f"MT5 login successful to account #{login} on server {server}")

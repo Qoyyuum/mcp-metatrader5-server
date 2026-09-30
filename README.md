@@ -146,11 +146,25 @@ Add this to your `claude_desktop_config.json` or whatever LLM config file:
         "--from",
         "mcp-metatrader5-server",
         "mt5mcp"
-      ]
+      ],
+      "env": {
+        "MT5_PATH": "C:\\Program Files\\MetaTrader 5\\terminal64.exe",
+        "MT5_LOGIN": "<YOUR_ACCOUNT_NUMBER>",
+        "MT5_PASSWORD": "<YOUR_PASSWORD>",
+        "MT5_SERVER": "<YOUR_BROKER_SERVER>"
+      }
     }
   }
 }
 ```
+
+The `env` block is optional. When it is set, `initialize()` and `login()` can be
+called without arguments and the agent never needs to see or ask for your
+credentials. Explicit arguments still take precedence. `MT5_USERNAME` is
+accepted as an alias for `MT5_LOGIN`.
+
+> **Security:** with credentials in the `env` block, the config file holds a
+> secret. Keep it out of git, shared backups and shared or synced folders.
 
 ## API Reference
 
