@@ -141,3 +141,124 @@ class TestConnectionParameters:
                     "login", {"login": 123456, "password": "pass", "server": server}
                 )
                 assert result.data is True
+
+
+@pytest.mark.unit
+class TestEnvCredentials:
+    """Test the environment variable fallback for initialize() and login()."""
+
+    @pytest.fixture(autouse=True)
+    def clean_env(self, monkeypatch):
+        for name in ("MT5_PATH", "MT5_LOGIN", "MT5_USERNAME", "MT5_PASSWORD", "MT5_SERVER"):
+            monkeypatch.delenv(name, raising=False)
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_login_from_env(self, mock_mt5, monkeypatch):
+        """login() with no arguments uses MT5_LOGIN, MT5_PASSWORD and MT5_SERVER."""
+        monkeypatch.setenv("MT5_LOGIN", "123456")
+        monkeypatch.setenv("MT5_PASSWORD", "env_secret")
+        monkeypatch.setenv("MT5_SERVER", "EnvServer")
+        mock_mt5.login.return_value = True
+
+        async with Client(mcp) as client:
+            result = await client.call_tool("login", {})
+
+        assert result.data is True
+        mock_mt5.login.assert_called_once_with(
+            login=123456, password="env_secret", server="EnvServer"
+        )
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_login_username_alias(self, mock_mt5, monkeypatch):
+        """MT5_USERNAME is accepted as the account number."""
+        monkeypatch.setenv("MT5_USERNAME", "654321")
+        monkeypatch.setenv("MT5_PASSWORD", "env_secret")
+        monkeypatch.setenv("MT5_SERVER", "EnvServer")
+        mock_mt5.login.return_value = True
+
+        async with Client(mcp) as client:
+            result = await client.call_tool("login", {})
+
+        assert result.data is True
+        mock_mt5.login.assert_called_once_with(
+            login=654321, password="env_secret", server="EnvServer"
+        )
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_explicit_args_override_env(self, mock_mt5, monkeypatch):
+        """Explicit arguments win over the environment."""
+        monkeypatch.setenv("MT5_LOGIN", "123456")
+        monkeypatch.setenv("MT5_PASSWORD", "env_secret")
+        monkeypatch.setenv("MT5_SERVER", "EnvServer")
+        mock_mt5.login.return_value = True
+
+        async with Client(mcp) as client:
+            result = await client.call_tool("login", {"login": 999, "server": "ArgServer"})
+
+        assert result.data is True
+        mock_mt5.login.assert_called_once_with(login=999, password="env_secret", server="ArgServer")
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_login_missing_credentials(self, mock_mt5):
+        """A clear error names the missing settings when nothing is configured."""
+        async with Client(mcp) as client:
+            with pytest.raises(Exception, match="Missing MT5 credentials"):
+                await client.call_tool("login", {})
+
+        mock_mt5.login.assert_not_called()
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_login_error_does_not_leak_password(self, mock_mt5, monkeypatch):
+        """The password is masked if the MT5 library echoes it in an exception."""
+        monkeypatch.setenv("MT5_LOGIN", "123456")
+        monkeypatch.setenv("MT5_PASSWORD", "env_secret")
+        monkeypatch.setenv("MT5_SERVER", "EnvServer")
+        mock_mt5.login.side_effect = RuntimeError("bad password env_secret")
+
+        async with Client(mcp) as client:
+            with pytest.raises(Exception) as exc_info:
+                await client.call_tool("login", {})
+
+        assert "env_secret" not in str(exc_info.value)
+        assert "***" in str(exc_info.value)
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_login_error_traceback_does_not_leak_password(
+        self, mock_mt5, monkeypatch, caplog
+    ):
+        """The original exception is not chained, so a logged traceback cannot show the password either."""
+        monkeypatch.setenv("MT5_LOGIN", "123456")
+        monkeypatch.setenv("MT5_PASSWORD", "env_secret")
+        monkeypatch.setenv("MT5_SERVER", "EnvServer")
+        mock_mt5.login.side_effect = RuntimeError("bad password env_secret")
+
+        with caplog.at_level("DEBUG"):
+            async with Client(mcp) as client:
+                with pytest.raises(Exception) as exc_info:
+                    await client.call_tool("login", {})
+
+        assert "env_secret" not in str(exc_info.value)
+        assert "env_secret" not in caplog.text
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_initialize_path_from_env(self, mock_mt5, monkeypatch):
+        """initialize() with no arguments uses MT5_PATH."""
+        monkeypatch.setenv("MT5_PATH", "D:\\MT5\\terminal64.exe")
+        mock_mt5.initialize.return_value = True
+
+        async with Client(mcp) as client:
+            result = await client.call_tool("initialize", {})
+
+        assert result.data is True
+        mock_mt5.initialize.assert_called_once_with(path="D:\\MT5\\terminal64.exe")
+
+    @patch("mcp_mt5.main.mt5")
+    async def test_initialize_without_path(self, mock_mt5):
+        """initialize() with no path and no MT5_PATH lets MetaTrader5 find the terminal."""
+        mock_mt5.initialize.return_value = True
+
+        async with Client(mcp) as client:
+            result = await client.call_tool("initialize", {})
+
+        assert result.data is True
+        mock_mt5.initialize.assert_called_once_with()
